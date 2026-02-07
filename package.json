@@ -1,0 +1,50 @@
+{
+  "name": "@imageforge/cli",
+  "version": "0.1.0",
+  "description": "Image optimization pipeline for Next.js. Blur placeholders + WebP/AVIF conversion in one command.",
+  "author": "Fabien Campana",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fabiendotc/imageforge"
+  },
+  "bugs": {
+    "url": "https://github.com/fabiendotc/imageforge/issues"
+  },
+  "homepage": "https://github.com/fabiendotc/imageforge#readme",
+  "bin": {
+    "imageforge": "./dist/cli.js"
+  },
+  "main": "./dist/types.js",
+  "types": "./dist/types.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types.d.ts",
+      "require": "./dist/types.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["image", "optimization", "webp", "avif", "blur", "placeholder", "blurdataurl", "nextjs", "cli"],
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^13.1.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

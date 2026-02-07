@@ -15,6 +15,14 @@ Build-time image pipeline for Next.js and web apps: generate blur placeholders a
 npm install -g @imageforge/cli
 ```
 
+## Development (pnpm)
+
+```bash
+pnpm install
+pnpm build
+pnpm test
+```
+
 ## Quick Start
 
 ```bash

@@ -12,6 +12,7 @@
     "url": "https://github.com/fabiendotc/imageforge/issues"
   },
   "homepage": "https://github.com/fabiendotc/imageforge#readme",
+  "packageManager": "pnpm@10.28.2",
   "bin": {
     "imageforge": "./dist/cli.js"
   },
@@ -27,11 +28,11 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "pretest": "npm run build",
+    "pretest": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepack": "npm run build",
-    "prepublishOnly": "npm run build"
+    "prepack": "tsc",
+    "prepublishOnly": "tsc"
   },
   "keywords": ["image", "optimization", "webp", "avif", "blur", "placeholder", "blurdataurl", "nextjs", "cli"],
   "dependencies": {

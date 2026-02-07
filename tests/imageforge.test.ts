@@ -252,6 +252,7 @@ describe("CLI integration", () => {
   const manifestPath = path.join(OUTPUT, "manifest.json");
 
   beforeAll(async () => {
+    fs.rmSync(cliDir, { recursive: true, force: true });
     fs.mkdirSync(cliDir, { recursive: true });
     await sharp({
       create: {
@@ -314,6 +315,9 @@ describe("CLI integration", () => {
 
     expect(output).toContain("1 processed");
     expect(output).not.toContain("0 processed");
+
+    // Restore default options cache for subsequent check-mode test.
+    execSync(`node ${CLI} ${cliDir} -o ${manifestPath}`, { encoding: "utf-8" });
   });
 
   it("--check passes when all processed", () => {

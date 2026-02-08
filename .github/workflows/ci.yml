@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         node:
-          - "18"
           - "20"
+          - "22"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,3 +39,33 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+  runtime-smoke-node18:
+    name: Runtime Smoke (Node 18)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: CLI help smoke
+        run: node dist/cli.js --help
+
+      - name: CLI version smoke
+        run: node dist/cli.js --version

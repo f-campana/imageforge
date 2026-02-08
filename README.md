@@ -145,3 +145,7 @@ imageforge ./public/images --check
 
 - exits `0` when all inputs are up to date
 - exits `1` when at least one input needs processing
+
+## CI Matrix Note
+
+GitHub Actions runs quality checks on Node 20/22 (Vitest/Vite compatibility) and keeps a separate Node 18 runtime smoke job to validate CLI support for `engines.node >=18`.

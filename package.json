@@ -39,8 +39,9 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm test",
+    "release:verify": "pnpm run check && pnpm run build && npm_config_cache=/tmp/npm-cache pnpm pack --dry-run",
     "prepack": "tsc",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "pnpm run check && pnpm run build"
   },
   "keywords": [
     "image",

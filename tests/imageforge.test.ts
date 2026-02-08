@@ -159,6 +159,7 @@ describe("discoverImages", () => {
     const targetDir = path.join(FIXTURES, "symlink-target");
     const linkPath = path.join(FIXTURES, "symlink-loop");
     fs.mkdirSync(targetDir, { recursive: true });
+    fs.rmSync(linkPath, { recursive: true, force: true });
     await sharp({
       create: {
         width: 24,
@@ -330,7 +331,11 @@ describe("CLI integration", () => {
   });
 
   it("reprocesses when cached output file is deleted", () => {
-    fs.unlinkSync(path.join(cliDir, "test.webp"));
+    const outputFile = path.join(cliDir, "test.webp");
+    if (!fs.existsSync(outputFile)) {
+      execSync(`node ${CLI} ${cliDir} -o ${manifestPath}`, { encoding: "utf-8" });
+    }
+    fs.unlinkSync(outputFile);
     const output = execSync(`node ${CLI} ${cliDir} -o ${manifestPath}`, {
       encoding: "utf-8",
     });
@@ -339,6 +344,10 @@ describe("CLI integration", () => {
   });
 
   it("reprocesses when quality changes", () => {
+    fs.rmSync(path.join(cliDir, ".imageforge-cache.json"), { force: true });
+    fs.rmSync(path.join(cliDir, "test.webp"), { force: true });
+    execSync(`node ${CLI} ${cliDir} -o ${manifestPath}`, { encoding: "utf-8" });
+
     const output = execSync(`node ${CLI} ${cliDir} -o ${manifestPath} --quality 60`, {
       encoding: "utf-8",
     });
@@ -532,6 +541,17 @@ describe("CLI integration", () => {
       const error = err as { status: number; stderr: string };
       expect(error.status).toBe(1);
       expect(error.stderr).toContain("Invalid blur size");
+    }
+  });
+
+  it("fails fast for invalid --quality values", () => {
+    try {
+      execSync(`node ${CLI} ${cliDir} -o ${manifestPath} --quality 0`, { encoding: "utf-8" });
+      expect.fail("Expected invalid quality to exit with code 1");
+    } catch (err: unknown) {
+      const error = err as { status: number; stderr: string };
+      expect(error.status).toBe(1);
+      expect(error.stderr).toContain("Invalid quality");
     }
   });
 

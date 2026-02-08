@@ -27,6 +27,14 @@ pnpm test
 pnpm run check
 ```
 
+## Release Verify
+
+Run the pre-release gate locally before publishing:
+
+```bash
+pnpm run release:verify
+```
+
 ## Quick Start
 
 ```bash

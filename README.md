@@ -47,11 +47,20 @@ Options:
 - `-f, --formats <formats>`: comma-separated output formats (default: `webp`)
 - `-q, --quality <number>`: output quality 1..100 (default: `80`)
 - `--no-blur`: skip blur placeholder generation
-- `--blur-size <number>`: blur dimensions (default: `4`)
+- `--blur-size <number>`: blur dimensions 1..256 (default: `4`)
 - `--no-cache`: disable cache reads/writes
+- `--force-overwrite`: allow overwriting existing output files
 - `--check`: exit with code `1` when files need processing
 - `-V, --version`: print version
 - `-h, --help`: print help
+
+Runtime behavior:
+
+- normal runs exit with code `1` if any file fails processing
+- when cache is enabled, existing output files must be cache-owned or the run fails fast
+- if cache-enabled ownership protection blocks a run, `--force-overwrite` is the explicit override
+- `--no-cache` ignores cache file reads/writes entirely
+- with `--no-cache`, existing outputs are protected by default; use `--force-overwrite` to overwrite
 
 ## Source Format Scope (v0.1.0)
 

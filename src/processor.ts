@@ -147,8 +147,15 @@ export async function processImage(
   }).metadata();
   const relativePath = toPosix(path.relative(inputDir, filePath));
 
-  const width = metadata.width || 0;
-  const height = metadata.height || 0;
+  // Keep metadata extraction separate from conversion pipeline and normalize
+  // dimensions from EXIF orientation here so manifest width/height match the
+  // rotated outputs without depending on pipeline order side effects.
+  const baseWidth = metadata.width || 0;
+  const baseHeight = metadata.height || 0;
+  const orientation = metadata.orientation || 1;
+  const isQuarterTurn = orientation >= 5 && orientation <= 8;
+  const width = isQuarterTurn ? baseHeight : baseWidth;
+  const height = isQuarterTurn ? baseWidth : baseHeight;
 
   const result: ImageResult = {
     file: relativePath,

@@ -65,6 +65,18 @@ beforeAll(async () => {
     .jpeg()
     .toFile(path.join(FIXTURES, "UPPER.JPG"));
 
+  await sharp({
+    create: {
+      width: 10,
+      height: 20,
+      channels: 3,
+      background: { r: 10, g: 200, b: 100 },
+    },
+  })
+    .jpeg()
+    .withMetadata({ orientation: 6 })
+    .toFile(path.join(FIXTURES, "oriented.jpg"));
+
   fs.writeFileSync(path.join(FIXTURES, "readme.txt"), "not an image");
   fs.writeFileSync(path.join(FIXTURES, "corrupt.jpg"), "");
 });
@@ -245,6 +257,19 @@ describe("processImage", () => {
       })
     ).rejects.toThrow();
   });
+
+  it("uses EXIF orientation for reported dimensions", async () => {
+    const result = await processImage(path.join(FIXTURES, "oriented.jpg"), FIXTURES, {
+      formats: ["webp"],
+      quality: 80,
+      blur: false,
+      blurSize: 4,
+    });
+
+    expect(result.width).toBe(20);
+    expect(result.height).toBe(10);
+    fs.unlinkSync(path.join(FIXTURES, "oriented.webp"));
+  });
 });
 
 describe("CLI integration", () => {
@@ -320,7 +345,7 @@ describe("CLI integration", () => {
     execSync(`node ${CLI} ${cliDir} -o ${manifestPath}`, { encoding: "utf-8" });
   });
 
-  it("allows reruns with --no-cache", () => {
+  it("blocks reruns with --no-cache unless --force-overwrite is set", () => {
     const noCacheDir = path.join(cliDir, "no-cache");
     fs.mkdirSync(noCacheDir, { recursive: true });
 
@@ -333,15 +358,110 @@ describe("CLI integration", () => {
       `node ${CLI} ${noCacheDir} --no-cache -o ${path.join(OUTPUT, "no-cache.json")}`,
       { encoding: "utf-8" }
     );
-    const second = execSync(
-      `node ${CLI} ${noCacheDir} --no-cache -o ${path.join(OUTPUT, "no-cache.json")}`,
+    expect(first).toContain("1 processed");
+    try {
+      execSync(
+        `node ${CLI} ${noCacheDir} --no-cache -o ${path.join(OUTPUT, "no-cache.json")}`,
+        { encoding: "utf-8" }
+      );
+      expect.fail("Expected second --no-cache run to fail without force");
+    } catch (err: unknown) {
+      const error = err as { status: number; stderr: string };
+      expect(error.status).toBe(1);
+      expect(error.stderr).toContain("--no-cache is enabled");
+    }
+
+    const forced = execSync(
+      `node ${CLI} ${noCacheDir} --no-cache --force-overwrite -o ${path.join(OUTPUT, "no-cache.json")}`,
+      { encoding: "utf-8" }
+    );
+    expect(forced).toContain("1 processed");
+
+    fs.rmSync(noCacheDir, { recursive: true, force: true });
+  });
+
+  it("ignores stale cache ownership when --no-cache is set", () => {
+    const dir = path.join(cliDir, "no-cache-stale");
+    fs.mkdirSync(dir, { recursive: true });
+
+    execSync(
+      `node -e "const sharp=require('sharp'); sharp({create:{width:30,height:20,channels:3,background:{r:1,g:2,b:3}}}).jpeg().toFile(process.argv[1]).then(()=>{}).catch((e)=>{console.error(e);process.exit(1);});" "${path.join(dir, "a.jpg")}"`,
+      { stdio: "ignore" }
+    );
+
+    fs.writeFileSync(
+      path.join(dir, ".imageforge-cache.json"),
+      JSON.stringify({
+        "other.jpg": {
+          hash: "deadbeef",
+          result: {
+            outputs: {
+              webp: { path: "a.webp", size: 1 },
+            },
+          },
+        },
+      })
+    );
+
+    const output = execSync(
+      `node ${CLI} ${dir} --no-cache -o ${path.join(OUTPUT, "no-cache-stale.json")}`,
       { encoding: "utf-8" }
     );
 
-    expect(first).toContain("1 processed");
-    expect(second).toContain("1 processed");
+    expect(output).toContain("1 processed");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 
-    fs.rmSync(noCacheDir, { recursive: true, force: true });
+  it("treats malformed cache schema as corrupt and continues", () => {
+    const dir = path.join(cliDir, "bad-cache");
+    fs.mkdirSync(dir, { recursive: true });
+
+    execSync(
+      `node -e "const sharp=require('sharp'); sharp({create:{width:32,height:32,channels:3,background:{r:9,g:9,b:9}}}).jpeg().toFile(process.argv[1]).then(()=>{}).catch((e)=>{console.error(e);process.exit(1);});" "${path.join(dir, "a.jpg")}"`,
+      { stdio: "ignore" }
+    );
+
+    fs.writeFileSync(
+      path.join(dir, ".imageforge-cache.json"),
+      JSON.stringify({
+        "a.jpg": { hash: "x" },
+      })
+    );
+
+    const output = execSync(
+      `node ${CLI} ${dir} -o ${path.join(OUTPUT, "bad-cache.json")}`,
+      { encoding: "utf-8" }
+    );
+
+    expect(output).toContain("1 processed");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("fails when output already exists and is not cache-owned", () => {
+    const dir = path.join(cliDir, "existing-output");
+    fs.mkdirSync(dir, { recursive: true });
+
+    execSync(
+      `node -e "const sharp=require('sharp'); sharp({create:{width:40,height:40,channels:3,background:{r:200,g:100,b:50}}}).jpeg().toFile(process.argv[1]).then(()=>{}).catch((e)=>{console.error(e);process.exit(1);});" "${path.join(dir, "hero.jpg")}"`,
+      { stdio: "ignore" }
+    );
+    execSync(
+      `node -e "const sharp=require('sharp'); sharp({create:{width:40,height:40,channels:3,background:{r:5,g:5,b:5}}}).webp().toFile(process.argv[1]).then(()=>{}).catch((e)=>{console.error(e);process.exit(1);});" "${path.join(dir, "hero.webp")}"`,
+      { stdio: "ignore" }
+    );
+
+    try {
+      execSync(`node ${CLI} ${dir} -o ${path.join(OUTPUT, "existing-output.json")}`, {
+        encoding: "utf-8",
+      });
+      expect.fail("Expected existing non-cache-owned output to fail");
+    } catch (err: unknown) {
+      const error = err as { status: number; stderr: string };
+      expect(error.status).toBe(1);
+      expect(error.stderr).toContain("not cache-owned");
+    }
+
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it("--check passes when all processed", () => {
@@ -376,6 +496,44 @@ describe("CLI integration", () => {
     }
 
     fs.unlinkSync(path.join(cliDir, "new.png"));
+  });
+
+  it("returns non-zero when at least one file fails in normal mode", () => {
+    const dir = path.join(cliDir, "with-failure");
+    fs.mkdirSync(dir, { recursive: true });
+
+    execSync(
+      `node -e "const sharp=require('sharp'); sharp({create:{width:50,height:30,channels:3,background:{r:10,g:120,b:220}}}).jpeg().toFile(process.argv[1]).then(()=>{}).catch((e)=>{console.error(e);process.exit(1);});" "${path.join(dir, "good.jpg")}"`,
+      { stdio: "ignore" }
+    );
+    fs.writeFileSync(path.join(dir, "bad.jpg"), "not an image");
+
+    try {
+      execSync(`node ${CLI} ${dir} -o ${path.join(OUTPUT, "with-failure.json")}`, {
+        encoding: "utf-8",
+      });
+      expect.fail("Expected run with corrupt file to exit non-zero");
+    } catch (err: unknown) {
+      const error = err as { status: number; stdout: string };
+      expect(error.status).toBe(1);
+      expect(error.stdout).toContain("failed");
+    }
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("fails fast for invalid --blur-size values", () => {
+    try {
+      execSync(
+        `node ${CLI} ${cliDir} -o ${manifestPath} --blur-size -1`,
+        { encoding: "utf-8" }
+      );
+      expect.fail("Expected invalid blur-size to exit with code 1");
+    } catch (err: unknown) {
+      const error = err as { status: number; stderr: string };
+      expect(error.status).toBe(1);
+      expect(error.stderr).toContain("Invalid blur size");
+    }
   });
 
   it("fails fast on output collisions", async () => {

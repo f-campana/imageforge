@@ -45,11 +45,56 @@ interface ImageWorkItem {
   hash: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOutputRecord(value: unknown): value is { path: string; size: number } {
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.size === "number" &&
+    Number.isFinite(value.size)
+  );
+}
+
+function isManifestEntry(value: unknown): value is ManifestEntry {
+  if (!isRecord(value)) return false;
+  if (typeof value.width !== "number" || !Number.isFinite(value.width)) return false;
+  if (typeof value.height !== "number" || !Number.isFinite(value.height)) return false;
+  if (typeof value.aspectRatio !== "number" || !Number.isFinite(value.aspectRatio)) return false;
+  if (typeof value.blurDataURL !== "string") return false;
+  if (typeof value.originalSize !== "number" || !Number.isFinite(value.originalSize)) return false;
+  if (typeof value.hash !== "string") return false;
+  if (!isRecord(value.outputs)) return false;
+  for (const output of Object.values(value.outputs)) {
+    if (!isOutputRecord(output)) return false;
+  }
+  return true;
+}
+
+function isCacheEntry(value: unknown): value is CacheEntry {
+  return (
+    isRecord(value) &&
+    typeof value.hash === "string" &&
+    isManifestEntry(value.result)
+  );
+}
+
 function loadCache(cachePath: string): Map<string, CacheEntry> {
   try {
     if (fs.existsSync(cachePath)) {
       const raw = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
-      return new Map(Object.entries(raw));
+      if (!isRecord(raw)) return new Map();
+      const entries: Array<[string, CacheEntry]> = [];
+      for (const [key, value] of Object.entries(raw)) {
+        if (!isCacheEntry(value)) {
+          // Parseable but malformed cache should be treated as corrupt.
+          return new Map();
+        }
+        entries.push([key, value]);
+      }
+      return new Map(entries);
     }
   } catch {
     // Corrupt cache — start fresh
@@ -83,7 +128,9 @@ function preflightCollisions(
   items: ImageWorkItem[],
   options: ProcessOptions,
   inputDir: string,
-  cache: Map<string, CacheEntry>
+  cache: Map<string, CacheEntry>,
+  useCache: boolean,
+  forceOverwrite: boolean
 ) {
   const planned = new Map<string, string>();
   const cacheOwners = new Map<string, string>();
@@ -117,8 +164,29 @@ function preflightCollisions(
 
       const fullOutputPath = path.resolve(inputDir, fromPosix(outputPath));
       if (!fs.existsSync(fullOutputPath)) continue;
+      if (forceOverwrite) continue;
+      if (!useCache) {
+        console.error(chalk.red("\nOutput path already exists and --no-cache is enabled:"));
+        console.error(
+          chalk.red(`  • ${item.relativePath} -> ${outputPath}`)
+        );
+        console.error(
+          chalk.yellow("Fix: remove existing outputs or rerun with --force-overwrite.")
+        );
+        process.exit(1);
+      }
       const owner = cacheOwners.get(outputPath);
-      if (owner && owner !== item.relativePath) {
+      if (!owner) {
+        console.error(chalk.red("\nOutput path already exists and is not cache-owned:"));
+        console.error(
+          chalk.red(`  • ${item.relativePath} -> ${outputPath}`)
+        );
+        console.error(
+          chalk.yellow("Fix: remove or rename the existing output, or use --out-dir in v0.2.0.")
+        );
+        process.exit(1);
+      }
+      if (owner !== item.relativePath) {
         console.error(chalk.red("\nOutput path already exists and is owned by a different cached source:"));
         console.error(
           chalk.red(`  • ${owner} -> ${outputPath}`)
@@ -152,6 +220,7 @@ program
   .option("--no-blur", "Skip blur placeholder generation")
   .option("--blur-size <number>", "Blur placeholder dimensions", "4")
   .option("--no-cache", "Disable file hash caching")
+  .option("--force-overwrite", "Allow overwriting existing output files")
   .option("--check", "Check mode: exit 1 if unprocessed images exist")
   .action(async (directory: string, opts: Record<string, unknown>) => {
     const inputDir = path.resolve(directory as string);
@@ -179,8 +248,16 @@ program
       (f): f is "webp" | "avif" => f === "webp" || f === "avif"
     );
     const blur = opts.blur !== false;
-    const blurSize = parseInt(opts.blurSize as string, 10) || 4;
+    const blurSizeRaw = parseInt(opts.blurSize as string, 10);
+    if (isNaN(blurSizeRaw) || blurSizeRaw < 1 || blurSizeRaw > 256) {
+      console.error(
+        chalk.red(`Invalid blur size: "${opts.blurSize}". Must be an integer between 1 and 256.`)
+      );
+      process.exit(1);
+    }
+    const blurSize = blurSizeRaw;
     const useCache = opts.cache !== false;
+    const forceOverwrite = opts.forceOverwrite === true;
     const checkMode = opts.check === true;
 
     // Validate input
@@ -215,8 +292,8 @@ program
 
     // Load cache
     const cachePath = path.join(inputDir, ".imageforge-cache.json");
-    const cache = loadCache(cachePath);
-    const writableCache = useCache ? cache : new Map<string, CacheEntry>(cache);
+    const cache = useCache ? loadCache(cachePath) : new Map<string, CacheEntry>();
+    const writableCache = cache;
 
     const items: ImageWorkItem[] = images.map((imagePath) => {
       const relativePath = toPosix(path.relative(inputDir, imagePath));
@@ -227,7 +304,7 @@ program
       };
     });
 
-    preflightCollisions(items, options, inputDir, cache);
+    preflightCollisions(items, options, inputDir, cache, useCache, forceOverwrite);
 
     const manifest: Manifest = {
       version: "1.0",
@@ -294,7 +371,11 @@ program
             const saving = Math.round(
               (1 - out.size / result.originalSize) * 100
             );
-            return `${fmt} (${formatSize(result.originalSize)} → ${formatSize(out.size)}, ${chalk.green(`-${saving}%`)})`;
+            const savingLabel =
+              saving >= 0
+                ? chalk.green(`-${saving}%`)
+                : chalk.yellow(`+${Math.abs(saving)}%`);
+            return `${fmt} (${formatSize(result.originalSize)} → ${formatSize(out.size)}, ${savingLabel})`;
           })
           .join(", ");
 
@@ -334,6 +415,10 @@ program
       totalOriginal > 0
         ? Math.round((1 - totalProcessed / totalOriginal) * 100)
         : 0;
+    const totalSavingLabel =
+      totalSaving >= 0
+        ? chalk.green(`-${totalSaving}%`)
+        : chalk.yellow(`+${Math.abs(totalSaving)}%`);
 
     console.log(chalk.dim("\n" + "─".repeat(50)));
     console.log(
@@ -344,10 +429,13 @@ program
     );
     if (totalOriginal > 0) {
       console.log(
-        `  Total: ${formatSize(totalOriginal)} → ${formatSize(totalProcessed)} (${chalk.green(`-${totalSaving}%`)})`
+        `  Total: ${formatSize(totalOriginal)} → ${formatSize(totalProcessed)} (${totalSavingLabel})`
       );
     }
     console.log(`  Manifest: ${chalk.cyan(path.relative(process.cwd(), outputPath))}\n`);
+    if (failed > 0) {
+      process.exitCode = 1;
+    }
   });
 
 program.parse();

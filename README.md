@@ -7,6 +7,7 @@ Build-time image pipeline for Next.js and web apps: generate blur placeholders a
 - WebP and AVIF conversion from one command
 - blur placeholder generation (`blurDataURL`)
 - hash-based caching for fast reruns
+- bounded parallel processing with `--concurrency`
 - `--check` mode for CI validation
 
 ## Install
@@ -59,6 +60,8 @@ By default this writes:
 - cache file at `./public/images/.imageforge-cache.json`
 - manifest at `./imageforge.json`
 
+With `--out-dir`, derivatives and cache are written under that directory while manifest output paths stay relative to the input directory.
+
 ## Usage
 
 ```bash
@@ -75,16 +78,66 @@ Options:
 - `--no-cache`: disable cache reads/writes
 - `--force-overwrite`: allow overwriting existing output files
 - `--check`: exit with code `1` when files need processing
+- `--out-dir <path>`: separate output directory for generated files
+- `--concurrency <number>`: process images in parallel (default: `min(8, availableParallelism)`)
+- `--json`: emit structured JSON report to stdout
+- `--verbose`: print additional diagnostics (cache path, hashes, mode details)
+- `--quiet`: suppress per-file non-error logs
+- `--config <path>`: explicitly load a JSON config file
 - `-V, --version`: print version
 - `-h, --help`: print help
 
 Runtime behavior:
 
 - normal runs exit with code `1` if any file fails processing
+- output collision checks are case-insensitive (`hero.jpg` and `Hero.png` are treated as conflicting outputs)
 - when cache is enabled, existing output files must be cache-owned or the run fails fast
 - if cache-enabled ownership protection blocks a run, `--force-overwrite` is the explicit override
 - `--no-cache` ignores cache file reads/writes entirely
 - with `--no-cache`, existing outputs are protected by default; use `--force-overwrite` to overwrite
+- symlinks are skipped during discovery (the walker does not recurse into symlinked directories)
+- `--check` prints an exact copy-pastable rerun command with effective processing options
+- standard logs include progress prefixes like `[42/500]`
+
+## Config File Support
+
+ImageForge resolves configuration in this order:
+
+1. defaults
+2. config file (`--config <path>`, otherwise `imageforge.config.json`, otherwise `package.json#imageforge`)
+3. CLI flags
+
+Unknown config keys fail fast.
+
+Example `imageforge.config.json`:
+
+```json
+{
+  "output": "imageforge.json",
+  "formats": ["webp", "avif"],
+  "quality": 80,
+  "blur": true,
+  "blurSize": 4,
+  "cache": true,
+  "outDir": "public/generated",
+  "concurrency": 4
+}
+```
+
+## JSON Output Mode
+
+Use `--json` to emit a machine-readable report to stdout:
+
+```bash
+imageforge ./public/images --json
+```
+
+The report includes:
+
+- normalized effective options
+- per-image status (`processed`, `cached`, `failed`, `needs-processing`)
+- summary counters and byte totals
+- rerun command hint in `--check` failures
 
 ## Source Format Scope (v0.1.0)
 
@@ -119,6 +172,8 @@ GIF handling is static-only in v0.1.0 (animated GIFs are processed as first fram
 
 All manifest keys and output paths are input-directory-relative POSIX paths (forward slashes).
 
+When `--out-dir` is used, each output path is still relative to the input directory (for example `generated/hero.webp`).
+
 ## Next.js Example
 
 ```ts
@@ -135,6 +190,17 @@ Then use:
 
 - original source path for `src`
 - `getImageData(src)?.blurDataURL` for `placeholder="blur"`
+
+## Programmatic API
+
+ImageForge now exports processor helpers from the package root and `./processor` subpath.
+
+```ts
+const imageforge = require("@imageforge/cli");
+const processor = require("@imageforge/cli/processor");
+```
+
+Useful exports include `processImage`, `convertImage`, `generateBlurDataURL`, and manifest types.
 
 ## Git Hygiene (In-place Outputs)
 
@@ -157,6 +223,7 @@ imageforge ./public/images --check
 
 - exits `0` when all inputs are up to date
 - exits `1` when at least one input needs processing
+- failure output includes the exact non-check command to run with the same processing options
 
 ## CI Matrix Note
 

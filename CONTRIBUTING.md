@@ -27,9 +27,12 @@ Allowed types include: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test
 2. Ensure CI is green (`pnpm run check` and `pnpm run build`).
 3. Use a semantic PR title (Conventional Commit format).
 4. Explain behavior changes and edge cases in the PR description.
+5. If release behavior is touched, verify both release and publish workflows still pass.
 
 ## Releases and Tags
 
 - Releases are automated by Release Please from Conventional Commits on `main`.
 - Tags are annotated SemVer tags with a `v` prefix (for example `v0.1.1`).
+- npm publication is automated from GitHub `release.published` events via `.github/workflows/publish.yml`.
+- `NPM_TOKEN` must be configured in repository secrets for publish jobs.
 - Do not manually edit `CHANGELOG.md` for routine releases; it is generated via release automation.

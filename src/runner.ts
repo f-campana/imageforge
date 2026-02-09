@@ -54,6 +54,7 @@ type WorkOutcome =
     };
 
 export interface RunOptions {
+  version: string;
   inputDir: string;
   outputPath: string;
   directoryArg: string;
@@ -456,7 +457,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
   }
 
   if (!options.json) {
-    printInfo(chalk.bold(`\nimageforge\n`));
+    printInfo(chalk.bold(`\nimageforge v${options.version}\n`));
     printInfo(
       `Processing ${chalk.cyan(images.length.toString())} images in ${chalk.dim(inputDir)}`
     );
@@ -513,61 +514,127 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     images: {},
   };
 
+  function formatOutputSummary(result: ImageResult): string {
+    return Object.entries(result.outputs)
+      .map(([fmt, output]) => {
+        const saving = Math.round((1 - output.size / result.originalSize) * 100);
+        const savingLabel =
+          saving >= 0
+            ? chalk.green(`-${saving.toString()}%`)
+            : chalk.yellow(`+${Math.abs(saving).toString()}%`);
+        return `${fmt} (${formatSize(result.originalSize)} → ${formatSize(output.size)}, ${savingLabel})`;
+      })
+      .join(", ");
+  }
+
+  function logOutcome(progress: string, outcome: WorkOutcome) {
+    if (outcome.kind === "cached") {
+      if (!options.quiet) {
+        printPerFile(
+          `  ${chalk.dim(progress)} ${chalk.dim("○")} ${chalk.dim(outcome.item.relativePath)} ${chalk.dim("(cached)")}`
+        );
+      }
+      if (options.verbose && !options.json) {
+        printInfo(chalk.dim(`    hash=${outcome.item.hash}`));
+      }
+      return;
+    }
+
+    if (outcome.kind === "needs-processing") {
+      if (!options.quiet) {
+        printPerFile(
+          `  ${chalk.dim(progress)} ${chalk.red("✗")} ${outcome.item.relativePath} ${chalk.red("(needs processing)")}`
+        );
+      }
+      return;
+    }
+
+    if (outcome.kind === "failed") {
+      printPerFile(
+        `  ${chalk.dim(progress)} ${chalk.red("✗")} ${outcome.item.relativePath} — ${chalk.red(outcome.message)}`,
+        true
+      );
+      return;
+    }
+
+    if (!options.quiet) {
+      const outputSummary = formatOutputSummary(outcome.result);
+      printPerFile(
+        `  ${chalk.dim(progress)} ${chalk.green("✓")} ${outcome.item.relativePath} → ${outputSummary}`
+      );
+    }
+    if (options.verbose && !options.json) {
+      printInfo(chalk.dim(`    hash=${outcome.item.hash}`));
+    }
+  }
+
+  async function processWorkItem(item: ImageWorkItem): Promise<WorkOutcome> {
+    const cacheEntry = cache.get(item.relativePath);
+    if (
+      options.useCache &&
+      cacheEntry?.hash === item.hash &&
+      cacheOutputsExist(cacheEntry, inputDir)
+    ) {
+      return {
+        kind: "cached",
+        item,
+        entry: cacheEntry.result,
+      };
+    }
+
+    if (options.checkMode) {
+      return {
+        kind: "needs-processing",
+        item,
+      };
+    }
+
+    try {
+      const result = await processImage(item.imagePath, inputDir, processOptions, outputDir);
+      const entry: ImageForgeEntry = {
+        width: result.width,
+        height: result.height,
+        aspectRatio: result.aspectRatio,
+        blurDataURL: result.blurDataURL,
+        originalSize: result.originalSize,
+        outputs: result.outputs,
+        hash: item.hash,
+      };
+      return {
+        kind: "processed",
+        item,
+        result,
+        entry,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      return {
+        kind: "failed",
+        item,
+        message,
+      };
+    }
+  }
+
   const limiter = pLimit(Math.max(1, options.concurrency));
-  const outcomes = await Promise.all(
-    items.map((item) =>
-      limiter(async (): Promise<WorkOutcome> => {
-        const cacheEntry = cache.get(item.relativePath);
-        if (
-          options.useCache &&
-          cacheEntry?.hash === item.hash &&
-          cacheOutputsExist(cacheEntry, inputDir)
-        ) {
-          return {
-            kind: "cached",
-            item,
-            entry: cacheEntry.result,
-          };
-        }
-
-        if (options.checkMode) {
-          return {
-            kind: "needs-processing",
-            item,
-          };
-        }
-
-        try {
-          const result = await processImage(item.imagePath, inputDir, processOptions, outputDir);
-          const entry: ImageForgeEntry = {
-            width: result.width,
-            height: result.height,
-            aspectRatio: result.aspectRatio,
-            blurDataURL: result.blurDataURL,
-            originalSize: result.originalSize,
-            outputs: result.outputs,
-            hash: item.hash,
-          };
-          return {
-            kind: "processed",
-            item,
-            result,
-            entry,
-          };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "unknown error";
-          return {
-            kind: "failed",
-            item,
-            message,
-          };
-        }
+  const outcomes = new Array<WorkOutcome | undefined>(items.length);
+  let completed = 0;
+  await Promise.all(
+    items.map((item, index) =>
+      limiter(async () => {
+        const outcome = await processWorkItem(item);
+        outcomes[index] = outcome;
+        completed += 1;
+        const progress = `[${completed.toString()}/${items.length.toString()}]`;
+        logOutcome(progress, outcome);
       })
     )
   );
 
-  for (const [index, outcome] of outcomes.entries()) {
-    const progress = `[${(index + 1).toString()}/${items.length.toString()}]`;
+  for (const outcome of outcomes) {
+    if (!outcome) {
+      continue;
+    }
 
     if (outcome.kind === "cached") {
       manifest.images[outcome.item.relativePath] = outcome.entry;
@@ -582,14 +649,6 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         status: "cached",
         outputs: outcome.entry.outputs,
       });
-      if (!options.quiet) {
-        printPerFile(
-          `  ${chalk.dim(progress)} ${chalk.dim("○")} ${chalk.dim(outcome.item.relativePath)} ${chalk.dim("(cached)")}`
-        );
-      }
-      if (options.verbose && !options.json) {
-        printInfo(chalk.dim(`    hash=${outcome.item.hash}`));
-      }
       continue;
     }
 
@@ -600,11 +659,6 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         hash: outcome.item.hash,
         status: "needs-processing",
       });
-      if (!options.quiet) {
-        printPerFile(
-          `  ${chalk.dim(progress)} ${chalk.red("✗")} ${outcome.item.relativePath} ${chalk.red("(needs processing)")}`
-        );
-      }
       continue;
     }
 
@@ -617,10 +671,6 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         status: "failed",
         message: outcome.message,
       });
-      printPerFile(
-        `  ${chalk.dim(progress)} ${chalk.red("✗")} ${outcome.item.relativePath} — ${chalk.red(outcome.message)}`,
-        true
-      );
       continue;
     }
 
@@ -632,17 +682,9 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     report.summary.processed += 1;
     report.summary.totalOriginalSize += outcome.result.originalSize;
 
-    const outputSummary = Object.entries(outcome.result.outputs)
-      .map(([fmt, output]) => {
-        report.summary.totalProcessedSize += output.size;
-        const saving = Math.round((1 - output.size / outcome.result.originalSize) * 100);
-        const savingLabel =
-          saving >= 0
-            ? chalk.green(`-${saving.toString()}%`)
-            : chalk.yellow(`+${Math.abs(saving).toString()}%`);
-        return `${fmt} (${formatSize(outcome.result.originalSize)} → ${formatSize(output.size)}, ${savingLabel})`;
-      })
-      .join(", ");
+    for (const output of Object.values(outcome.result.outputs)) {
+      report.summary.totalProcessedSize += output.size;
+    }
 
     report.images.push({
       file: outcome.item.relativePath,
@@ -650,15 +692,6 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       status: "processed",
       outputs: outcome.entry.outputs,
     });
-
-    if (!options.quiet) {
-      printPerFile(
-        `  ${chalk.dim(progress)} ${chalk.green("✓")} ${outcome.item.relativePath} → ${outputSummary}`
-      );
-    }
-    if (options.verbose && !options.json) {
-      printInfo(chalk.dim(`    hash=${outcome.item.hash}`));
-    }
   }
 
   report.summary.durationMs = Date.now() - startTime;

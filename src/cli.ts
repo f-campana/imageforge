@@ -180,11 +180,21 @@ function resolveOptions(
   if (command.getOptionValueSource("json") === "cli" && options.json !== undefined) {
     resolved.json = options.json;
   }
-  if (command.getOptionValueSource("verbose") === "cli" && options.verbose !== undefined) {
+  const verboseFromCli = command.getOptionValueSource("verbose") === "cli";
+  const quietFromCli = command.getOptionValueSource("quiet") === "cli";
+  if (verboseFromCli && options.verbose !== undefined) {
     resolved.verbose = options.verbose;
   }
-  if (command.getOptionValueSource("quiet") === "cli" && options.quiet !== undefined) {
+  if (quietFromCli && options.quiet !== undefined) {
     resolved.quiet = options.quiet;
+  }
+
+  // Explicit CLI verbosity choice should override config-derived opposite mode.
+  if (verboseFromCli && resolved.verbose) {
+    resolved.quiet = false;
+  }
+  if (quietFromCli && resolved.quiet) {
+    resolved.verbose = false;
   }
 
   if (resolved.quality < 1 || resolved.quality > 100) {
@@ -261,6 +271,7 @@ program
       );
 
       const result = await runImageforge({
+        version: packageVersion,
         inputDir: directory,
         outputPath: resolved.output,
         directoryArg: directory,

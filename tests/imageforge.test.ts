@@ -508,6 +508,7 @@ describe("CLI integration", () => {
     const result = runCli([cliDir, "-o", manifestPath]);
     expect(result.status).toBe(0);
     expect(fs.existsSync(manifestPath)).toBe(true);
+    expect(result.stdout).toContain("imageforge v0.1.0");
 
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as {
       version: string;
@@ -914,6 +915,24 @@ describe("config support", () => {
 
     expect(Object.keys(manifest.images["cfg.jpg"].outputs)).toEqual(["webp", "avif"]);
     expect(manifest.images["cfg.jpg"].blurDataURL).toBe("");
+  });
+
+  it("lets explicit --verbose override config quiet mode", () => {
+    fs.writeFileSync(
+      path.join(configDir, "imageforge.config.json"),
+      JSON.stringify(
+        {
+          quiet: true,
+        },
+        null,
+        2
+      )
+    );
+
+    const outputManifest = path.join(configDir, "verbose-override.json");
+    const result = runCli([".", "--verbose", "--output", outputManifest], configDir);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Cache file:");
   });
 
   it("fails fast on unknown config keys", () => {

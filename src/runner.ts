@@ -132,7 +132,9 @@ const CACHE_FILE = ".imageforge-cache.json";
 const CACHE_SCHEMA_VERSION = 1;
 const DEFAULT_CACHE_LOCK_TIMEOUT_MS = 15_000;
 const DEFAULT_CACHE_LOCK_STALE_MS = 120_000;
-const CACHE_LOCK_POLL_MS = 100;
+const CACHE_LOCK_INITIAL_POLL_MS = 25;
+const CACHE_LOCK_MAX_POLL_MS = 500;
+const CACHE_LOCK_BACKOFF_FACTOR = 1.5;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -190,6 +192,7 @@ async function acquireCacheLock(lockPath: string): Promise<number> {
     DEFAULT_CACHE_LOCK_STALE_MS
   );
   const startedAt = Date.now();
+  let pollMs = CACHE_LOCK_INITIAL_POLL_MS;
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
 
   for (;;) {
@@ -206,18 +209,33 @@ async function acquireCacheLock(lockPath: string): Promise<number> {
       try {
         const stat = fs.statSync(lockPath);
         if (Date.now() - stat.mtimeMs > staleMs) {
-          fs.rmSync(lockPath, { force: true });
+          try {
+            fs.rmSync(lockPath);
+          } catch (removeErr) {
+            const removeCode = (removeErr as NodeJS.ErrnoException).code;
+            if (removeCode !== "ENOENT") {
+              throw removeErr;
+            }
+          }
           continue;
         }
-      } catch {
-        // Lock disappeared between attempts, retry immediately.
-        continue;
+      } catch (statErr) {
+        const statCode = (statErr as NodeJS.ErrnoException).code;
+        if (statCode === "ENOENT") {
+          // Lock disappeared between attempts, retry immediately.
+          continue;
+        }
+        throw statErr;
       }
 
       if (Date.now() - startedAt >= timeoutMs) {
         throw new Error(`Timed out waiting for cache lock: ${lockPath}`);
       }
-      await sleep(CACHE_LOCK_POLL_MS);
+
+      const remainingMs = timeoutMs - (Date.now() - startedAt);
+      const delayMs = Math.max(1, Math.min(pollMs, remainingMs));
+      await sleep(delayMs);
+      pollMs = Math.min(CACHE_LOCK_MAX_POLL_MS, Math.ceil(pollMs * CACHE_LOCK_BACKOFF_FACTOR));
     }
   }
 }

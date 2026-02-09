@@ -175,6 +175,7 @@ GIF handling is static-only in v0.1.0 (animated GIFs are processed as first fram
 All manifest keys and output paths are input-directory-relative POSIX paths (forward slashes).
 
 When `--out-dir` is used, each output path is still relative to the input directory (for example `generated/hero.webp`).
+If `--out-dir` is outside the input tree, manifest output paths can contain `../` segments by design.
 
 ## Next.js Example
 

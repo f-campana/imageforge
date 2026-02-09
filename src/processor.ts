@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import * as fs from "fs";
+import { promises as fsp } from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 
@@ -124,7 +125,7 @@ export async function processImage(
   options: ProcessOptions,
   outputDir = inputDir
 ): Promise<ImageResult> {
-  const buffer = fs.readFileSync(filePath);
+  const buffer = await fsp.readFile(filePath);
   const metadata = await sharp(buffer, {
     limitInputPixels: LIMIT_INPUT_PIXELS,
   }).metadata();
@@ -168,8 +169,8 @@ export async function processImage(
     };
 
     // Write output file in the configured output root.
-    fs.mkdirSync(path.dirname(outputFullPath), { recursive: true });
-    fs.writeFileSync(outputFullPath, outputBuffer);
+    await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
+    await fsp.writeFile(outputFullPath, outputBuffer);
   }
 
   return result;

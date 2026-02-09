@@ -340,6 +340,19 @@ describe("convertImage", () => {
 });
 
 describe("processImage", () => {
+  it("defaults outputDir to inputDir when not provided", async () => {
+    const result = await processImage(path.join(FIXTURES, "photo.jpg"), FIXTURES, {
+      formats: ["webp"],
+      quality: 80,
+      blur: false,
+      blurSize: 4,
+    });
+
+    expect(result.outputs.webp.path).toBe("photo.webp");
+    expect(fs.existsSync(path.join(FIXTURES, "photo.webp"))).toBe(true);
+    fs.rmSync(path.join(FIXTURES, "photo.webp"), { force: true });
+  });
+
   it("returns complete result and writes outputs", async () => {
     const result = await processImage(
       path.join(FIXTURES, "photo.jpg"),
@@ -772,6 +785,29 @@ describe("CLI integration", () => {
     expect(manifest.images["nested/icon.png"].outputs.webp.path).toBe("generated/nested/icon.webp");
 
     expect(fs.existsSync(path.join(outDir, ".imageforge-cache.json"))).toBe(true);
+  });
+
+  it("supports disjoint --out-dir paths and keeps manifest paths input-relative", async () => {
+    const dir = path.join(cliDir, "out-dir-disjoint");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "asset.jpg"), 32, 24, { r: 9, g: 8, b: 7 });
+
+    const outDir = path.join(OUTPUT, "external-generated");
+    fs.rmSync(outDir, { recursive: true, force: true });
+    const outputManifest = path.join(OUTPUT, "out-dir-disjoint-manifest.json");
+    const result = runCli([dir, "--out-dir", outDir, "-o", outputManifest]);
+    expect(result.status).toBe(0);
+
+    const generated = path.join(outDir, "asset.webp");
+    expect(fs.existsSync(generated)).toBe(true);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<string, { outputs: { webp: { path: string } } }>;
+    };
+    const expectedManifestPath = toPosix(path.relative(dir, generated));
+    expect(expectedManifestPath.startsWith("..")).toBe(true);
+    expect(manifest.images["asset.jpg"].outputs.webp.path).toBe(expectedManifestPath);
   });
 
   it("rejects output collisions case-insensitively", async () => {

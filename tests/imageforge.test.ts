@@ -28,9 +28,13 @@ interface CliRunResult {
   stderr: string;
 }
 
-function runCli(args: string[], cwd = ROOT): CliRunResult {
+function runCli(args: string[], cwd = ROOT, extraEnv: Record<string, string> = {}): CliRunResult {
   const result = spawnSync("node", [CLI, ...args], {
     cwd,
+    env: {
+      ...process.env,
+      ...extraEnv,
+    },
     encoding: "utf-8",
   });
 
@@ -653,6 +657,63 @@ describe("CLI integration", () => {
     expect(result.stdout).toContain("1 processed");
   });
 
+  it("writes versioned cache files", () => {
+    const dir = path.join(cliDir, "versioned-cache");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(cliDir, "test.jpg"), path.join(dir, "a.jpg"));
+
+    const result = runCli([dir, "-o", path.join(OUTPUT, "versioned-cache.json")]);
+    expect(result.status).toBe(0);
+
+    const cache = JSON.parse(
+      fs.readFileSync(path.join(dir, ".imageforge-cache.json"), "utf-8")
+    ) as {
+      version: number;
+      entries: Record<string, unknown>;
+    };
+    expect(cache.version).toBe(1);
+    expect(cache.entries["a.jpg"]).toBeDefined();
+  });
+
+  it("fails when cache lock cannot be acquired in time", () => {
+    const dir = path.join(cliDir, "cache-lock-timeout");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(cliDir, "test.jpg"), path.join(dir, "a.jpg"));
+
+    const lockPath = path.join(dir, ".imageforge-cache.json.lock");
+    fs.writeFileSync(lockPath, "locked");
+
+    const result = runCli([dir, "-o", path.join(OUTPUT, "cache-lock-timeout.json")], ROOT, {
+      IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS: "50",
+      IMAGEFORGE_CACHE_LOCK_STALE_MS: "60000",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Timed out waiting for cache lock");
+
+    fs.rmSync(lockPath, { force: true });
+  });
+
+  it("reclaims stale cache lock files", () => {
+    const dir = path.join(cliDir, "cache-lock-stale");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(cliDir, "test.jpg"), path.join(dir, "a.jpg"));
+
+    const lockPath = path.join(dir, ".imageforge-cache.json.lock");
+    fs.writeFileSync(lockPath, "stale lock");
+    const staleTime = new Date(Date.now() - 5_000);
+    fs.utimesSync(lockPath, staleTime, staleTime);
+
+    const result = runCli([dir, "-o", path.join(OUTPUT, "cache-lock-stale.json")], ROOT, {
+      IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS: "500",
+      IMAGEFORGE_CACHE_LOCK_STALE_MS: "100",
+    });
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
   it("fails when output already exists and is not cache-owned", () => {
     const dir = path.join(cliDir, "existing-output");
     fs.rmSync(dir, { recursive: true, force: true });
@@ -950,6 +1011,42 @@ describe("config support", () => {
     const result = runCli([".", "--verbose", "--output", outputManifest], configDir);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Cache file:");
+  });
+
+  it("lets --no-check override check=true from config", () => {
+    fs.writeFileSync(
+      path.join(configDir, "imageforge.config.json"),
+      JSON.stringify(
+        {
+          check: true,
+        },
+        null,
+        2
+      )
+    );
+
+    const outputManifest = path.join(configDir, "override-no-check.json");
+    const result = runCli([".", "--no-check", "--output", outputManifest], configDir);
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(outputManifest)).toBe(true);
+  });
+
+  it("lets --no-json override json=true from config", () => {
+    fs.writeFileSync(
+      path.join(configDir, "imageforge.config.json"),
+      JSON.stringify(
+        {
+          json: true,
+        },
+        null,
+        2
+      )
+    );
+
+    const outputManifest = path.join(configDir, "override-no-json.json");
+    const result = runCli([".", "--no-json", "--output", outputManifest], configDir);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("imageforge v0.1.0");
   });
 
   it("fails fast on unknown config keys", () => {

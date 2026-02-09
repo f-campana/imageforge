@@ -189,15 +189,15 @@ function resolveOptions(
     resolved.quiet = options.quiet;
   }
 
-  if (verboseFromCli && quietFromCli) {
+  if (verboseFromCli && quietFromCli && resolved.verbose && resolved.quiet) {
     throw new Error("--verbose and --quiet cannot be used together.");
   }
 
   // Explicit CLI verbosity choice should override config-derived opposite mode.
-  if (verboseFromCli && resolved.verbose) {
+  if (verboseFromCli && !quietFromCli && resolved.verbose) {
     resolved.quiet = false;
   }
-  if (quietFromCli && resolved.quiet) {
+  if (quietFromCli && !verboseFromCli && resolved.quiet) {
     resolved.verbose = false;
   }
 
@@ -245,19 +245,26 @@ program
   .option("-o, --output <path>", "Manifest output path (default: imageforge.json)")
   .option("-f, --formats <formats>", "Output formats (comma-separated: webp,avif)")
   .option("-q, --quality <number>", "Output quality 1..100 (default: 80)")
+  .option("--blur", "Enable blur placeholder generation")
   .option("--no-blur", "Skip blur placeholder generation")
   .option("--blur-size <number>", "Blur placeholder dimensions 1..256 (default: 4)")
+  .option("--cache", "Enable file hash caching")
   .option("--no-cache", "Disable file hash caching")
   .option("--force-overwrite", "Allow overwriting existing output files")
+  .option("--no-force-overwrite", "Disable overwrite mode")
   .option("--check", "Check mode: exit 1 if unprocessed images exist")
+  .option("--no-check", "Disable check mode")
   .option("--out-dir <path>", "Output directory for generated derivatives")
   .option(
     "--concurrency <number>",
     `Number of images to process concurrently (default: ${getDefaultConcurrency().toString()})`
   )
   .option("--json", "Emit machine-readable JSON report to stdout")
+  .option("--no-json", "Disable JSON output mode")
   .option("--verbose", "Show additional diagnostics")
+  .option("--no-verbose", "Disable verbose diagnostics")
   .option("--quiet", "Suppress per-file logs")
+  .option("--no-quiet", "Disable quiet mode")
   .option("--config <path>", "Path to imageforge config file")
   .action(async (directory: string, options: CliOptions, command: Command) => {
     try {

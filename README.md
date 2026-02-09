@@ -109,6 +109,8 @@ ImageForge resolves configuration in this order:
 
 Unknown config keys fail fast.
 
+Boolean options can be explicitly disabled from CLI using `--no-<flag>` (for example `--no-check`, `--no-json`, `--no-force-overwrite`, `--no-quiet`).
+
 Example `imageforge.config.json`:
 
 ```json

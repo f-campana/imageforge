@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1](https://github.com/f-campana/imageforge/compare/v0.1.0...v0.1.1) (2026-02-09)
+
+
+### Features
+
+* **cli:** add runner with config, out-dir, and concurrency ([43c965d](https://github.com/f-campana/imageforge/commit/43c965dedd52343b9f560f50e6a48ac0250ad87e))
+
+
+### Bug Fixes
+
+* **cli:** address opus review follow-ups ([14e9544](https://github.com/f-campana/imageforge/commit/14e9544f2c56cc02a2f1f6c7e39f82ad64570e1b))
+* **cli:** apply post-review verbosity and progress fixes ([2b12abc](https://github.com/f-campana/imageforge/commit/2b12abc6ddef743ebfae1428f0c9f3ee43034579))
+* **cli:** close final remediation gaps ([d744b3b](https://github.com/f-campana/imageforge/commit/d744b3b969220510619eba76cfcd9d733c5a8109))
+* **cli:** close loop on config overrides and cache safety ([a80c124](https://github.com/f-campana/imageforge/commit/a80c124f4b14656782ea1a6d42f41015274c5f90))
+* **cli:** enforce verbose and quiet mutual exclusivity ([2a8d708](https://github.com/f-campana/imageforge/commit/2a8d70800115002d36e9af72d0086a83d0f8c7c3))
+
 ## [0.1.0] - 2026-02-08
 
 ### Added

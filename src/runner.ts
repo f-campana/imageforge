@@ -267,7 +267,8 @@ function loadCache(cachePath: string): Map<string, CacheEntry> {
 
 function saveCacheAtomic(cachePath: string, cache: Map<string, CacheEntry>) {
   fs.mkdirSync(path.dirname(cachePath), { recursive: true });
-  const tempPath = `${cachePath}.${process.pid.toString()}.tmp`;
+  const randomSuffix = `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+  const tempPath = `${cachePath}.${process.pid.toString()}.${randomSuffix}.tmp`;
   fs.writeFileSync(
     tempPath,
     JSON.stringify(
@@ -282,9 +283,8 @@ function saveCacheAtomic(cachePath: string, cache: Map<string, CacheEntry>) {
 
   try {
     fs.renameSync(tempPath, cachePath);
-  } catch {
-    fs.rmSync(cachePath, { force: true });
-    fs.renameSync(tempPath, cachePath);
+  } finally {
+    fs.rmSync(tempPath, { force: true });
   }
 }
 

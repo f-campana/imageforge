@@ -568,6 +568,27 @@ describe("CLI integration", () => {
     expect(fs.existsSync(path.join(dir, "dual.avif"))).toBe(true);
   });
 
+  it("processes files with spaces and unicode names", async () => {
+    const dir = path.join(cliDir, "unicode-spaces");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    const fileName = "ete photo 01 - café.JPG";
+    await createJpeg(path.join(dir, fileName), 64, 48, { r: 120, g: 80, b: 40 });
+
+    const outputManifest = path.join(OUTPUT, "unicode-spaces-manifest.json");
+    const result = runCli([dir, "-o", outputManifest]);
+    expect(result.status).toBe(0);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<string, { outputs: { webp: { path: string } } }>;
+    };
+
+    expect(manifest.images[fileName]).toBeDefined();
+    expect(manifest.images[fileName].outputs.webp.path).toBe("ete photo 01 - café.webp");
+    expect(fs.existsSync(path.join(dir, "ete photo 01 - café.webp"))).toBe(true);
+  });
+
   it("supports --no-blur", () => {
     const dir = path.join(cliDir, "no-blur");
     fs.rmSync(dir, { recursive: true, force: true });
@@ -948,6 +969,7 @@ describe("CLI integration", () => {
 
 describe("config support", () => {
   const configDir = path.join(__dirname, "config-fixtures");
+  const configFilePath = path.join(configDir, "imageforge.config.json");
 
   beforeAll(async () => {
     fs.rmSync(configDir, { recursive: true, force: true });
@@ -961,7 +983,7 @@ describe("config support", () => {
 
   it("loads imageforge.config.json with CLI overrides", () => {
     fs.writeFileSync(
-      path.join(configDir, "imageforge.config.json"),
+      configFilePath,
       JSON.stringify(
         {
           output: "from-config.json",
@@ -997,7 +1019,7 @@ describe("config support", () => {
 
   it("lets explicit --verbose override config quiet mode", () => {
     fs.writeFileSync(
-      path.join(configDir, "imageforge.config.json"),
+      configFilePath,
       JSON.stringify(
         {
           quiet: true,
@@ -1013,9 +1035,28 @@ describe("config support", () => {
     expect(result.stdout).toContain("Cache file:");
   });
 
+  it("reports config source for conflicting verbosity options", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify(
+        {
+          verbose: true,
+          quiet: true,
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], configDir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Invalid verbosity settings in");
+    expect(result.stderr).toContain("imageforge.config.json");
+  });
+
   it("lets --no-check override check=true from config", () => {
     fs.writeFileSync(
-      path.join(configDir, "imageforge.config.json"),
+      configFilePath,
       JSON.stringify(
         {
           check: true,
@@ -1033,7 +1074,7 @@ describe("config support", () => {
 
   it("lets --no-json override json=true from config", () => {
     fs.writeFileSync(
-      path.join(configDir, "imageforge.config.json"),
+      configFilePath,
       JSON.stringify(
         {
           json: true,
@@ -1051,7 +1092,7 @@ describe("config support", () => {
 
   it("fails fast on unknown config keys", () => {
     fs.writeFileSync(
-      path.join(configDir, "imageforge.config.json"),
+      configFilePath,
       JSON.stringify({
         unknownFlag: true,
       })
@@ -1061,7 +1102,43 @@ describe("config support", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Unknown config key");
 
-    fs.rmSync(path.join(configDir, "imageforge.config.json"), { force: true });
+    fs.rmSync(configFilePath, { force: true });
+  });
+
+  it("fails fast on invalid config value types", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify(
+        {
+          quality: "high",
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], configDir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Invalid "quality"');
+    expect(result.stderr).toContain("imageforge.config.json");
+  });
+
+  it("includes config source path in range validation errors", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify(
+        {
+          quality: 0,
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], configDir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Invalid quality in");
+    expect(result.stderr).toContain("imageforge.config.json");
   });
 
   it("supports explicit --config path", () => {
@@ -1077,6 +1154,33 @@ describe("config support", () => {
     const result = runCli([".", "--config", explicitConfig], configDir);
     expect(result.status).toBe(0);
     expect(fs.existsSync(path.join(configDir, "from-explicit-config.json"))).toBe(true);
+  });
+
+  it("loads package.json#imageforge when imageforge.config.json is absent", async () => {
+    const pkgDir = path.join(configDir, "pkg-source");
+    fs.rmSync(pkgDir, { recursive: true, force: true });
+    fs.mkdirSync(pkgDir, { recursive: true });
+    await createJpeg(path.join(pkgDir, "pkg.jpg"), 80, 60, { r: 60, g: 90, b: 120 });
+
+    fs.writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify(
+        {
+          name: "imageforge-config-fixture",
+          version: "1.0.0",
+          imageforge: {
+            output: "from-package-config.json",
+            formats: ["webp", "avif"],
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], pkgDir);
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(path.join(pkgDir, "from-package-config.json"))).toBe(true);
   });
 });
 

@@ -124,6 +124,7 @@ function resolveOptions(
   options: CliOptions,
   command: Command,
   config: ImageForgeConfig,
+  configSourcePath: string | null,
   defaultConcurrency: number
 ): { resolved: ResolvedOptions; formats: OutputFormat[] } {
   const resolved: ResolvedOptions = {
@@ -201,25 +202,40 @@ function resolveOptions(
     resolved.verbose = false;
   }
 
+  const qualityFromConfig =
+    command.getOptionValueSource("quality") !== "cli" && config.quality !== undefined;
   if (resolved.quality < 1 || resolved.quality > 100) {
+    const sourceHint = qualityFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
     throw new Error(
-      `Invalid quality: "${resolved.quality.toString()}". Must be between 1 and 100.`
+      `Invalid quality${sourceHint}: "${resolved.quality.toString()}". Must be between 1 and 100.`
     );
   }
 
+  const blurSizeFromConfig =
+    command.getOptionValueSource("blurSize") !== "cli" && config.blurSize !== undefined;
   if (resolved.blurSize < 1 || resolved.blurSize > 256) {
+    const sourceHint = blurSizeFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
     throw new Error(
-      `Invalid blur size: "${resolved.blurSize.toString()}". Must be between 1 and 256.`
+      `Invalid blur size${sourceHint}: "${resolved.blurSize.toString()}". Must be between 1 and 256.`
     );
   }
 
+  const concurrencyFromConfig =
+    command.getOptionValueSource("concurrency") !== "cli" && config.concurrency !== undefined;
   if (resolved.concurrency < 1 || resolved.concurrency > 64) {
+    const sourceHint = concurrencyFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
     throw new Error(
-      `Invalid concurrency: "${resolved.concurrency.toString()}". Must be between 1 and 64.`
+      `Invalid concurrency${sourceHint}: "${resolved.concurrency.toString()}". Must be between 1 and 64.`
     );
   }
 
   if (resolved.verbose && resolved.quiet) {
+    if (!verboseFromCli && !quietFromCli && config.verbose === true && config.quiet === true) {
+      const source = configSourcePath ?? "config";
+      throw new Error(
+        `Invalid verbosity settings in ${source}: "verbose" and "quiet" cannot both be true.`
+      );
+    }
     throw new Error("--verbose and --quiet cannot be used together.");
   }
 
@@ -278,6 +294,7 @@ program
         options,
         command,
         loadedConfig.config,
+        loadedConfig.sourcePath,
         getDefaultConcurrency()
       );
 

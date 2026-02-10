@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3](https://github.com/f-campana/imageforge/compare/v0.1.2...v0.1.3) (2026-02-10)
+
+
+### Bug Fixes
+
+* **ci:** ignore generated changelog formatting drift ([0ad6690](https://github.com/f-campana/imageforge/commit/0ad6690eef958269641e93431e2d5364473fbf81))
+
 ## [0.1.2](https://github.com/f-campana/imageforge/compare/v0.1.1...v0.1.2) (2026-02-10)
 
 

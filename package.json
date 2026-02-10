@@ -1,6 +1,6 @@
 {
   "name": "@imageforge/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Image optimization pipeline for Next.js. Blur placeholders + WebP/AVIF conversion in one command.",
   "author": "Fabien Campana",
   "license": "MIT",

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -50,6 +50,46 @@ function runCli(args: string[], cwd = ROOT, extraEnv: Record<string, string> = {
     stdout: result.stdout,
     stderr: result.stderr,
   };
+}
+
+function runCliAsync(
+  args: string[],
+  cwd = ROOT,
+  extraEnv: Record<string, string> = {}
+): Promise<CliRunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("node", [CLI, ...args], {
+      cwd,
+      env: {
+        ...process.env,
+        ...extraEnv,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      resolve({
+        status: code ?? 0,
+        stdout,
+        stderr,
+      });
+    });
+  });
 }
 
 function makeNoiseImage(width: number, height: number): Promise<Buffer> {
@@ -749,6 +789,55 @@ describe("CLI integration", () => {
     });
     expect(result.status).toBe(0);
     expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it("serializes concurrent runs with a shared cache lock", async () => {
+    const dir = path.join(cliDir, "cache-lock-concurrent");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    for (let index = 0; index < 3; index += 1) {
+      await createJpeg(path.join(dir, `img-${index.toString()}.jpg`), 120, 90, {
+        r: 20 * index,
+        g: 80,
+        b: 140,
+      });
+    }
+
+    const manifestPath = path.join(OUTPUT, "cache-lock-concurrent.json");
+    const args = [dir, "-o", manifestPath, "-f", "webp,avif"];
+
+    const [first, second] = await Promise.all([
+      runCliAsync(args, ROOT, {
+        IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS: "10000",
+      }),
+      runCliAsync(args, ROOT, {
+        IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS: "10000",
+      }),
+    ]);
+
+    expect(first.status).toBe(0);
+    expect(second.status).toBe(0);
+
+    const combinedOutput = `${first.stdout}\n${second.stdout}`;
+    expect(combinedOutput).toContain("3 processed");
+    expect(combinedOutput).toContain("(cached)");
+
+    const cachePath = path.join(dir, ".imageforge-cache.json");
+    expect(fs.existsSync(cachePath)).toBe(true);
+    expect(fs.existsSync(`${cachePath}.lock`)).toBe(false);
+
+    const cache = JSON.parse(fs.readFileSync(cachePath, "utf-8")) as {
+      version: number;
+      entries: Record<string, unknown>;
+    };
+    expect(cache.version).toBe(1);
+    expect(Object.keys(cache.entries)).toHaveLength(3);
+
+    for (let index = 0; index < 3; index += 1) {
+      expect(fs.existsSync(path.join(dir, `img-${index.toString()}.webp`))).toBe(true);
+      expect(fs.existsSync(path.join(dir, `img-${index.toString()}.avif`))).toBe(true);
+    }
   });
 
   it("fails when output already exists and is not cache-owned", () => {

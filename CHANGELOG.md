@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4](https://github.com/f-campana/imageforge/compare/v0.1.3...v0.1.4) (2026-02-11)
+
+
+### Bug Fixes
+
+* **lockfile:** restore chalk 5.6.2 entry for frozen installs ([#19](https://github.com/f-campana/imageforge/issues/19)) ([0b20997](https://github.com/f-campana/imageforge/commit/0b20997719982b8c558b6a7775f1d03815ce46f1))
+
 ## [0.1.3](https://github.com/f-campana/imageforge/compare/v0.1.2...v0.1.3) (2026-02-10)
 
 

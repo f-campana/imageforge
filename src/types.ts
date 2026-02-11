@@ -11,10 +11,18 @@ export interface ImageForgeEntry {
   blurDataURL: string;
   originalSize: number;
   outputs: Record<string, ImageForgeOutput>;
+  variants?: Record<string, ImageForgeVariant[]>;
   hash: string;
 }
 
 export interface ImageForgeOutput {
+  path: string;
+  size: number;
+}
+
+export interface ImageForgeVariant {
+  width: number;
+  height: number;
   path: string;
   size: number;
 }

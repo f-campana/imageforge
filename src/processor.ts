@@ -14,6 +14,14 @@ export interface ImageResult {
   blurDataURL: string;
   originalSize: number;
   outputs: Record<string, { path: string; size: number }>;
+  variants?: Record<string, ImageVariant[]>;
+}
+
+export interface ImageVariant {
+  width: number;
+  height: number;
+  path: string;
+  size: number;
 }
 
 export interface ProcessOptions {
@@ -21,6 +29,7 @@ export interface ProcessOptions {
   quality: number;
   blur: boolean;
   blurSize: number;
+  widths?: number[];
 }
 
 export interface DiscoveryWarning {
@@ -45,9 +54,10 @@ export function fromPosix(filePath: string): string {
   return filePath.split("/").join(path.sep);
 }
 
-export function outputPathFor(relativePath: string, format: OutputFormat): string {
+export function outputPathFor(relativePath: string, format: OutputFormat, width?: number): string {
   const parsed = path.posix.parse(toPosix(relativePath));
-  return path.posix.join(parsed.dir, `${parsed.name}.${format}`);
+  const widthSuffix = width === undefined ? "" : `.w${width.toString()}`;
+  return path.posix.join(parsed.dir, `${parsed.name}${widthSuffix}.${format}`);
 }
 
 export function discoverImages(
@@ -99,12 +109,17 @@ export function fileHash(filePath: string, options?: ProcessOptions): string {
   const hash = crypto.createHash("sha256").update(content);
 
   if (options) {
+    const normalizedWidths =
+      options.widths === undefined
+        ? null
+        : [...new Set(options.widths)].sort((left, right) => left - right);
     hash.update(
       JSON.stringify({
         formats: [...options.formats].sort(),
         quality: options.quality,
         blur: options.blur,
         blurSize: options.blurSize,
+        widths: normalizedWidths,
       })
     );
   }
@@ -125,9 +140,17 @@ export async function generateBlurDataURL(buffer: Buffer, size = 4): Promise<str
 export async function convertImage(
   buffer: Buffer,
   format: OutputFormat,
-  quality: number
+  quality: number,
+  width?: number
 ): Promise<Buffer> {
   let pipeline = sharp(buffer, { limitInputPixels: LIMIT_INPUT_PIXELS }).rotate();
+  if (width !== undefined) {
+    pipeline = pipeline.resize({
+      width,
+      fit: "inside",
+      withoutEnlargement: true,
+    });
+  }
 
   if (format === "webp") {
     pipeline = pipeline.webp({
@@ -145,6 +168,17 @@ export async function convertImage(
   }
 
   return pipeline.toBuffer();
+}
+
+function resolveVariantWidths(sourceWidth: number, requestedWidths?: number[]): number[] {
+  if (requestedWidths === undefined || requestedWidths.length === 0) {
+    return [sourceWidth];
+  }
+  const eligible = requestedWidths.filter((requestedWidth) => requestedWidth <= sourceWidth);
+  if (eligible.length > 0) {
+    return eligible;
+  }
+  return [sourceWidth];
 }
 
 export async function processImage(
@@ -186,19 +220,53 @@ export async function processImage(
 
   // Convert to output formats
   for (const format of options.formats) {
-    const outputBuffer = await convertImage(buffer, format, options.quality);
-    const outputInOutputDir = outputPathFor(relativePath, format);
-    const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
-    const outputRelPath = toPosix(path.relative(inputDir, outputFullPath));
+    if (options.widths === undefined || options.widths.length === 0) {
+      const outputBuffer = await convertImage(buffer, format, options.quality);
+      const outputInOutputDir = outputPathFor(relativePath, format);
+      const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
+      const outputRelPath = toPosix(path.relative(inputDir, outputFullPath));
 
+      result.outputs[format] = {
+        path: outputRelPath,
+        size: outputBuffer.length,
+      };
+
+      await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
+      await fsp.writeFile(outputFullPath, outputBuffer);
+      continue;
+    }
+
+    const variantWidths = resolveVariantWidths(width, options.widths);
+    const variants: ImageVariant[] = [];
+
+    for (const variantWidth of variantWidths) {
+      const outputBuffer = await convertImage(buffer, format, options.quality, variantWidth);
+      const outputInOutputDir = outputPathFor(relativePath, format, variantWidth);
+      const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
+      const outputRelPath = toPosix(path.relative(inputDir, outputFullPath));
+      const variantHeight =
+        height > 0 ? Math.max(1, Math.round((variantWidth / width) * height)) : 0;
+
+      variants.push({
+        width: variantWidth,
+        height: variantHeight,
+        path: outputRelPath,
+        size: outputBuffer.length,
+      });
+
+      // Write output file in the configured output root.
+      await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
+      await fsp.writeFile(outputFullPath, outputBuffer);
+    }
+
+    result.variants ??= {};
+    result.variants[format] = variants;
+
+    const selectedOutput = variants[variants.length - 1];
     result.outputs[format] = {
-      path: outputRelPath,
-      size: outputBuffer.length,
+      path: selectedOutput.path,
+      size: selectedOutput.size,
     };
-
-    // Write output file in the configured output root.
-    await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
-    await fsp.writeFile(outputFullPath, outputBuffer);
   }
 
   return result;

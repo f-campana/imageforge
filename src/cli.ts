@@ -14,6 +14,7 @@ interface CliOptions {
   quality?: string;
   blur?: boolean;
   blurSize?: string;
+  widths?: string;
   cache?: boolean;
   forceOverwrite?: boolean;
   check?: boolean;
@@ -31,6 +32,7 @@ interface ResolvedOptions {
   quality: number;
   blur: boolean;
   blurSize: number;
+  widths: number[] | null;
   cache: boolean;
   forceOverwrite: boolean;
   check: boolean;
@@ -89,6 +91,37 @@ function parseFormatsInput(value: string | string[]): string[] {
     .filter(Boolean);
 }
 
+function normalizeWidths(widths: number[]): number[] {
+  if (widths.length === 0) {
+    throw new Error("Invalid widths: must include at least one width.");
+  }
+
+  const uniqueSorted = Array.from(new Set(widths)).sort((left, right) => left - right);
+  for (const width of uniqueSorted) {
+    if (width < 1 || width > 16_384) {
+      throw new Error(`Invalid widths: "${width.toString()}". Must be between 1 and 16384.`);
+    }
+  }
+  return uniqueSorted;
+}
+
+function parseWidthsInput(value: string): number[] {
+  const tokens = value.split(",");
+  const parsed: number[] = [];
+
+  for (const [index, token] of tokens.entries()) {
+    const normalized = token.trim();
+    if (normalized === "") {
+      throw new Error(
+        `Invalid widths: empty value at position ${(index + 1).toString()} in "${value}".`
+      );
+    }
+    parsed.push(parseIntegerFromString("width", normalized));
+  }
+
+  return normalizeWidths(parsed);
+}
+
 function normalizeFormats(
   formatsInput: string[],
   jsonMode: boolean
@@ -113,6 +146,7 @@ function applyConfig(target: ResolvedOptions, config: ImageForgeConfig) {
   if (config.blur !== undefined) target.blur = config.blur;
   if (config.blurSize !== undefined)
     target.blurSize = parseNumberOption("blurSize", config.blurSize);
+  if (config.widths !== undefined) target.widths = [...config.widths];
   if (config.cache !== undefined) target.cache = config.cache;
   if (config.forceOverwrite !== undefined) target.forceOverwrite = config.forceOverwrite;
   if (config.check !== undefined) target.check = config.check;
@@ -137,6 +171,7 @@ function resolveOptions(
     quality: 80,
     blur: true,
     blurSize: 4,
+    widths: null,
     cache: true,
     forceOverwrite: false,
     check: false,
@@ -163,6 +198,9 @@ function resolveOptions(
   }
   if (command.getOptionValueSource("blurSize") === "cli" && options.blurSize !== undefined) {
     resolved.blurSize = parseIntegerFromString("blur size", options.blurSize);
+  }
+  if (command.getOptionValueSource("widths") === "cli" && options.widths !== undefined) {
+    resolved.widths = parseWidthsInput(options.widths);
   }
   if (command.getOptionValueSource("cache") === "cli" && options.cache !== undefined) {
     resolved.cache = options.cache;
@@ -224,6 +262,23 @@ function resolveOptions(
     );
   }
 
+  const widthsFromConfig =
+    command.getOptionValueSource("widths") !== "cli" && config.widths !== undefined;
+  if (resolved.widths !== null) {
+    if (resolved.widths.length === 0) {
+      const sourceHint = widthsFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
+      throw new Error(`Invalid widths${sourceHint}: must include at least one width.`);
+    }
+    const invalidWidth = resolved.widths.find((width) => width < 1 || width > 16_384);
+    if (invalidWidth !== undefined) {
+      const sourceHint = widthsFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
+      throw new Error(
+        `Invalid width${sourceHint}: "${invalidWidth.toString()}". Must be between 1 and 16384.`
+      );
+    }
+    resolved.widths = normalizeWidths(resolved.widths);
+  }
+
   const concurrencyFromConfig =
     command.getOptionValueSource("concurrency") !== "cli" && config.concurrency !== undefined;
   if (resolved.concurrency < 1 || resolved.concurrency > 64) {
@@ -268,6 +323,10 @@ program
   .option("--blur", "Enable blur placeholder generation")
   .option("--no-blur", "Skip blur placeholder generation")
   .option("--blur-size <number>", "Blur placeholder dimensions 1..256 (default: 4)")
+  .option(
+    "--widths <list>",
+    "Responsive width set as comma-separated integers (example: 320,640,960)"
+  )
   .option("--cache", "Enable file hash caching")
   .option("--no-cache", "Disable file hash caching")
   .option("--force-overwrite", "Allow overwriting existing output files")
@@ -312,6 +371,7 @@ program
         quality: resolved.quality,
         blur: resolved.blur,
         blurSize: resolved.blurSize,
+        widths: resolved.widths,
         useCache: resolved.cache,
         forceOverwrite: resolved.forceOverwrite,
         checkMode: resolved.check,

@@ -12,7 +12,7 @@ import {
   toPosix,
 } from "./processor";
 import type { DiscoveryWarning, ImageResult, OutputFormat, ProcessOptions } from "./processor";
-import type { ImageForgeEntry, ImageForgeManifest } from "./types";
+import type { ImageForgeEntry, ImageForgeManifest, ImageForgeVariant } from "./types";
 
 interface CacheEntry {
   hash: string;
@@ -63,6 +63,7 @@ export interface RunOptions {
   quality: number;
   blur: boolean;
   blurSize: number;
+  widths: number[] | null;
   useCache: boolean;
   forceOverwrite: boolean;
   checkMode: boolean;
@@ -79,6 +80,7 @@ export interface RunImageReport {
   status: "processed" | "cached" | "failed" | "needs-processing";
   message?: string;
   outputs?: Record<string, { path: string; size: number }>;
+  variants?: Record<string, ImageForgeVariant[]>;
 }
 
 export interface RunSummary {
@@ -104,6 +106,7 @@ export interface RunReport {
     quality: number;
     blur: boolean;
     blurSize: number;
+    widths: number[] | null;
     cache: boolean;
     forceOverwrite: boolean;
     concurrency: number;
@@ -150,6 +153,35 @@ function isOutputRecord(value: unknown): value is { path: string; size: number }
   );
 }
 
+function isVariantRecord(value: unknown): value is ImageForgeVariant {
+  return (
+    isRecord(value) &&
+    typeof value.width === "number" &&
+    Number.isFinite(value.width) &&
+    typeof value.height === "number" &&
+    Number.isFinite(value.height) &&
+    typeof value.path === "string" &&
+    typeof value.size === "number" &&
+    Number.isFinite(value.size)
+  );
+}
+
+function collectEntryOutputs(entry: ImageForgeEntry): { path: string; size: number }[] {
+  const outputs = new Map<string, { path: string; size: number }>();
+  for (const output of Object.values(entry.outputs)) {
+    outputs.set(output.path, output);
+  }
+  for (const variants of Object.values(entry.variants ?? {})) {
+    for (const variant of variants) {
+      outputs.set(variant.path, {
+        path: variant.path,
+        size: variant.size,
+      });
+    }
+  }
+  return [...outputs.values()];
+}
+
 function isManifestEntry(value: unknown): value is ImageForgeEntry {
   if (!isRecord(value)) return false;
   if (typeof value.width !== "number" || !Number.isFinite(value.width)) return false;
@@ -161,6 +193,15 @@ function isManifestEntry(value: unknown): value is ImageForgeEntry {
   if (!isRecord(value.outputs)) return false;
   for (const output of Object.values(value.outputs)) {
     if (!isOutputRecord(output)) return false;
+  }
+  if ("variants" in value && value.variants !== undefined) {
+    if (!isRecord(value.variants)) return false;
+    for (const variants of Object.values(value.variants)) {
+      if (!Array.isArray(variants)) return false;
+      for (const variant of variants) {
+        if (!isVariantRecord(variant)) return false;
+      }
+    }
   }
   return true;
 }
@@ -369,8 +410,25 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+function totalProcessedSizeForEntry(entry: ImageForgeEntry): number {
+  return collectEntryOutputs(entry).reduce((sum, output) => sum + output.size, 0);
+}
+
+function totalProcessedSizeForResult(result: ImageResult): number {
+  const outputs = new Map<string, number>();
+  for (const output of Object.values(result.outputs)) {
+    outputs.set(output.path, output.size);
+  }
+  for (const variants of Object.values(result.variants ?? {})) {
+    for (const variant of variants) {
+      outputs.set(variant.path, variant.size);
+    }
+  }
+  return [...outputs.values()].reduce((sum, size) => sum + size, 0);
+}
+
 function cacheOutputsExist(entry: CacheEntry, inputDir: string): boolean {
-  for (const output of Object.values(entry.result.outputs)) {
+  for (const output of collectEntryOutputs(entry.result)) {
     const fullPath = path.resolve(inputDir, fromPosix(output.path));
     if (!fs.existsSync(fullPath)) return false;
   }
@@ -385,11 +443,26 @@ function resolveOutputPath(
   relativePath: string,
   format: OutputFormat,
   inputDir: string,
-  outputDir: string
+  outputDir: string,
+  width?: number
 ) {
-  const outputInsideOutDir = outputPathFor(relativePath, format);
+  const outputInsideOutDir = outputPathFor(relativePath, format, width);
   const fullOutputPath = path.resolve(outputDir, fromPosix(outputInsideOutDir));
   return toPosix(path.relative(inputDir, fullOutputPath));
+}
+
+function resolveOutputPaths(
+  relativePath: string,
+  format: OutputFormat,
+  inputDir: string,
+  outputDir: string,
+  widths: number[] | undefined
+): string[] {
+  if (!widths || widths.length === 0) {
+    return [resolveOutputPath(relativePath, format, inputDir, outputDir)];
+  }
+
+  return widths.map((width) => resolveOutputPath(relativePath, format, inputDir, outputDir, width));
 }
 
 function preflightCollisions(
@@ -405,67 +478,76 @@ function preflightCollisions(
   const cacheOwners = new Map<string, { source: string; outputPath: string }>();
 
   for (const [source, entry] of cache.entries()) {
-    for (const output of Object.values(entry.result.outputs)) {
+    for (const output of collectEntryOutputs(entry.result)) {
       cacheOwners.set(canonicalPathKey(output.path), { source, outputPath: output.path });
     }
   }
 
   for (const item of items) {
     for (const format of options.formats) {
-      const outputPath = resolveOutputPath(item.relativePath, format, inputDir, outputDir);
-      const outputKey = canonicalPathKey(outputPath);
-      const existingSource = planned.get(outputKey);
+      const outputPaths = resolveOutputPaths(
+        item.relativePath,
+        format,
+        inputDir,
+        outputDir,
+        options.widths
+      );
 
-      if (existingSource && existingSource.source !== item.relativePath) {
-        return {
-          message: "Output collision detected:",
-          details: [
-            `  • ${existingSource.source} -> ${existingSource.outputPath}`,
-            `  • ${item.relativePath} -> ${outputPath}`,
-            "Fix: rename one source file or change --out-dir.",
-          ],
-        };
-      }
+      for (const outputPath of outputPaths) {
+        const outputKey = canonicalPathKey(outputPath);
+        const existingSource = planned.get(outputKey);
 
-      planned.set(outputKey, {
-        source: item.relativePath,
-        outputPath,
-      });
+        if (existingSource && existingSource.source !== item.relativePath) {
+          return {
+            message: "Output collision detected:",
+            details: [
+              `  • ${existingSource.source} -> ${existingSource.outputPath}`,
+              `  • ${item.relativePath} -> ${outputPath}`,
+              "Fix: rename one source file or change --out-dir.",
+            ],
+          };
+        }
 
-      const fullOutputPath = path.resolve(inputDir, fromPosix(outputPath));
-      if (!fs.existsSync(fullOutputPath)) continue;
-      if (forceOverwrite) continue;
+        planned.set(outputKey, {
+          source: item.relativePath,
+          outputPath,
+        });
 
-      if (!useCache) {
-        return {
-          message: "Output path already exists and --no-cache is enabled:",
-          details: [
-            `  • ${item.relativePath} -> ${outputPath}`,
-            "Fix: remove existing outputs or rerun with --force-overwrite.",
-          ],
-        };
-      }
+        const fullOutputPath = path.resolve(inputDir, fromPosix(outputPath));
+        if (!fs.existsSync(fullOutputPath)) continue;
+        if (forceOverwrite) continue;
 
-      const owner = cacheOwners.get(outputKey);
-      if (!owner) {
-        return {
-          message: "Output path already exists and is not cache-owned:",
-          details: [
-            `  • ${item.relativePath} -> ${outputPath}`,
-            "Fix: remove or rename the existing output, or use --out-dir.",
-          ],
-        };
-      }
+        if (!useCache) {
+          return {
+            message: "Output path already exists and --no-cache is enabled:",
+            details: [
+              `  • ${item.relativePath} -> ${outputPath}`,
+              "Fix: remove existing outputs or rerun with --force-overwrite.",
+            ],
+          };
+        }
 
-      if (owner.source !== item.relativePath) {
-        return {
-          message: "Output path already exists and is owned by a different cached source:",
-          details: [
-            `  • ${owner.source} -> ${owner.outputPath}`,
-            `  • ${item.relativePath} -> ${outputPath}`,
-            "Fix: rename the source file, remove conflicting output, or use --out-dir.",
-          ],
-        };
+        const owner = cacheOwners.get(outputKey);
+        if (!owner) {
+          return {
+            message: "Output path already exists and is not cache-owned:",
+            details: [
+              `  • ${item.relativePath} -> ${outputPath}`,
+              "Fix: remove or rename the existing output, or use --out-dir.",
+            ],
+          };
+        }
+
+        if (owner.source !== item.relativePath) {
+          return {
+            message: "Output path already exists and is owned by a different cached source:",
+            details: [
+              `  • ${owner.source} -> ${owner.outputPath}`,
+              `  • ${item.relativePath} -> ${outputPath}`,
+              "Fix: rename the source file, remove conflicting output, or use --out-dir.",
+            ],
+          };
+        }
       }
     }
   }
@@ -503,6 +585,9 @@ function buildRerunCommand(options: RunOptions, outputDir: string): string {
   ];
 
   if (!options.blur) command.push("--no-blur");
+  if (options.widths && options.widths.length > 0) {
+    command.push("--widths", options.widths.join(","));
+  }
   if (!options.useCache) command.push("--no-cache");
   if (options.forceOverwrite) command.push("--force-overwrite");
   if (options.outDir) {
@@ -535,6 +620,7 @@ function createInitialReport(options: RunOptions, outputDir: string, cachePath: 
       quality: options.quality,
       blur: options.blur,
       blurSize: options.blurSize,
+      widths: options.widths,
       cache: options.useCache,
       forceOverwrite: options.forceOverwrite,
       concurrency: options.concurrency,
@@ -614,6 +700,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     quality: options.quality,
     blur: options.blur,
     blurSize: options.blurSize,
+    widths: options.widths ?? undefined,
   };
 
   const cacheLockPath = `${cachePath}.lock`;
@@ -660,6 +747,11 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       printInfo(
         `Formats: ${options.formats.map((f) => chalk.cyan(f)).join(", ")}  Quality: ${chalk.cyan(options.quality.toString())}  Blur: ${options.blur ? chalk.green("yes") : chalk.dim("no")}`
       );
+      if (options.widths && options.widths.length > 0) {
+        printInfo(
+          `Widths: ${options.widths.map((width) => chalk.cyan(width.toString())).join(", ")}`
+        );
+      }
       printInfo(
         `Output root: ${chalk.dim(outputDir)}  Cache: ${options.useCache ? chalk.green("enabled") : chalk.dim("disabled")}`
       );
@@ -731,6 +823,14 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     function formatOutputSummary(result: ImageResult): string {
       return Object.entries(result.outputs)
         .map(([fmt, output]) => {
+          const variants = result.variants?.[fmt];
+          if (variants && variants.length > 0) {
+            const smallest = variants[0];
+            const largest = variants[variants.length - 1];
+            const totalSize = variants.reduce((sum, variant) => sum + variant.size, 0);
+            return `${fmt} (${variants.length.toString()} variants: ${smallest.width.toString()}w-${largest.width.toString()}w, total ${formatSize(totalSize)})`;
+          }
+
           const saving = Math.round((1 - output.size / result.originalSize) * 100);
           const savingLabel =
             saving >= 0
@@ -812,6 +912,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
           blurDataURL: result.blurDataURL,
           originalSize: result.originalSize,
           outputs: result.outputs,
+          variants: result.variants,
           hash: item.hash,
         };
         return {
@@ -854,14 +955,13 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         manifest.images[outcome.item.relativePath] = outcome.entry;
         report.summary.cached += 1;
         report.summary.totalOriginalSize += outcome.entry.originalSize;
-        for (const output of Object.values(outcome.entry.outputs)) {
-          report.summary.totalProcessedSize += output.size;
-        }
+        report.summary.totalProcessedSize += totalProcessedSizeForEntry(outcome.entry);
         report.images.push({
           file: outcome.item.relativePath,
           hash: outcome.item.hash,
           status: "cached",
           outputs: outcome.entry.outputs,
+          variants: outcome.entry.variants,
         });
         continue;
       }
@@ -895,16 +995,14 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       });
       report.summary.processed += 1;
       report.summary.totalOriginalSize += outcome.result.originalSize;
-
-      for (const output of Object.values(outcome.result.outputs)) {
-        report.summary.totalProcessedSize += output.size;
-      }
+      report.summary.totalProcessedSize += totalProcessedSizeForResult(outcome.result);
 
       report.images.push({
         file: outcome.item.relativePath,
         hash: outcome.item.hash,
         status: "processed",
         outputs: outcome.entry.outputs,
+        variants: outcome.entry.variants,
       });
     }
 

@@ -90,6 +90,12 @@ Write outputs to a dedicated directory:
 imageforge ./public/images --out-dir ./public/generated
 ```
 
+Generate responsive width variants:
+
+```bash
+imageforge ./public/images --formats webp,avif --widths 320,640,960,1280
+```
+
 ## CLI Usage
 
 ```bash
@@ -103,6 +109,7 @@ imageforge <directory> [options]
 | `-q, --quality <number>`                     | Output quality `1..100` (default: `80`)                                |
 | `--blur` / `--no-blur`                       | Enable/disable blur placeholder generation                             |
 | `--blur-size <number>`                       | Blur dimensions `1..256` (default: `4`)                                |
+| `--widths <list>`                            | Responsive widths as comma-separated integers (opt-in)                 |
 | `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                      |
 | `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                            |
 | `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                   |
@@ -123,6 +130,7 @@ imageforge <directory> [options]
 - Output collision checks are case-insensitive.
 - Existing outputs are protected unless explicitly overwritten with `--force-overwrite`.
 - With `--check`, ImageForge prints an exact copy-pastable rerun command.
+- Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
 
 ## Configuration
 
@@ -143,6 +151,7 @@ Example `imageforge.config.json`:
   "quality": 80,
   "blur": true,
   "blurSize": 4,
+  "widths": [320, 640, 960, 1280],
   "cache": true,
   "outDir": "public/generated",
   "concurrency": 4
@@ -180,8 +189,22 @@ Manifest shape (`imageforge.json`):
       "blurDataURL": "data:image/png;base64,...",
       "originalSize": 345678,
       "outputs": {
-        "webp": { "path": "hero.webp", "size": 98765 },
-        "avif": { "path": "hero.avif", "size": 65432 }
+        "webp": { "path": "hero.w1280.webp", "size": 50210 },
+        "avif": { "path": "hero.w1280.avif", "size": 31100 }
+      },
+      "variants": {
+        "webp": [
+          { "width": 320, "height": 213, "path": "hero.w320.webp", "size": 9012 },
+          { "width": 640, "height": 427, "path": "hero.w640.webp", "size": 17654 },
+          { "width": 960, "height": 640, "path": "hero.w960.webp", "size": 33210 },
+          { "width": 1280, "height": 853, "path": "hero.w1280.webp", "size": 50210 }
+        ],
+        "avif": [
+          { "width": 320, "height": 213, "path": "hero.w320.avif", "size": 6010 },
+          { "width": 640, "height": 427, "path": "hero.w640.avif", "size": 12203 },
+          { "width": 960, "height": 640, "path": "hero.w960.avif", "size": 21998 },
+          { "width": 1280, "height": 853, "path": "hero.w1280.avif", "size": 31100 }
+        ]
       },
       "hash": "abc123..."
     }
@@ -194,6 +217,7 @@ Notes:
 - Manifest keys and output paths are input-directory-relative POSIX paths.
 - When using `--out-dir`, output paths remain relative to the input directory.
 - If `--out-dir` is outside the input tree, manifest paths may include `../` segments.
+- When `--widths` is used, `outputs.<format>` points to the largest generated variant.
 
 ## Next.js Integration Example
 
@@ -211,6 +235,15 @@ Then use:
 
 - Original source path for `src`
 - `getImageData(src)?.blurDataURL` for `placeholder="blur"`
+
+Optional `srcset` helper for responsive variants:
+
+```ts
+export function getSrcSet(src: string, format: "webp" | "avif") {
+  const variants = (manifest as Manifest).images[src]?.variants?.[format];
+  return variants?.map((variant) => `${variant.path} ${variant.width}w`).join(", ");
+}
+```
 
 ## Programmatic API
 

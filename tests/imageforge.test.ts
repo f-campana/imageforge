@@ -92,6 +92,19 @@ function runCliAsync(
   });
 }
 
+async function waitForPath(filePath: string, timeoutMs = 3000): Promise<void> {
+  const startedAt = Date.now();
+  for (;;) {
+    if (fs.existsSync(filePath)) return;
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(`Timed out waiting for path: ${filePath}`);
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 25);
+    });
+  }
+}
+
 function makeNoiseImage(width: number, height: number): Promise<Buffer> {
   const raw = crypto.randomBytes(width * height * 3);
   return sharp(raw, { raw: { width, height, channels: 3 } })
@@ -789,6 +802,44 @@ describe("CLI integration", () => {
     });
     expect(result.status).toBe(0);
     expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it("does not reclaim an active lock even with aggressive stale settings", async () => {
+    const dir = path.join(cliDir, "cache-lock-heartbeat");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    for (let index = 0; index < 20; index += 1) {
+      await createJpeg(path.join(dir, `img-${index.toString()}.jpg`), 1200, 900, {
+        r: (index * 13) % 255,
+        g: 60,
+        b: 120,
+      });
+    }
+
+    const manifestPath = path.join(OUTPUT, "cache-lock-heartbeat.json");
+    const lockPath = path.join(dir, ".imageforge-cache.json.lock");
+    const firstRun = runCliAsync([dir, "-o", manifestPath, "--concurrency", "1"], ROOT, {
+      IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS: "10000",
+      IMAGEFORGE_CACHE_LOCK_STALE_MS: "100",
+      IMAGEFORGE_CACHE_LOCK_HEARTBEAT_MS: "25",
+    });
+
+    await waitForPath(lockPath);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 250);
+    });
+
+    const secondRun = runCli([dir, "-o", manifestPath], ROOT, {
+      IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS: "100",
+      IMAGEFORGE_CACHE_LOCK_STALE_MS: "100",
+      IMAGEFORGE_CACHE_LOCK_HEARTBEAT_MS: "25",
+    });
+
+    const firstResult = await firstRun;
+    expect(firstResult.status).toBe(0);
+    expect(secondRun.status).toBe(1);
+    expect(secondRun.stderr).toContain("Timed out waiting for cache lock");
   });
 
   it("serializes concurrent runs with a shared cache lock", async () => {

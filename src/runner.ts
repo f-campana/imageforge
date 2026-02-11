@@ -132,6 +132,7 @@ const CACHE_FILE = ".imageforge-cache.json";
 const CACHE_SCHEMA_VERSION = 1;
 const DEFAULT_CACHE_LOCK_TIMEOUT_MS = 15_000;
 const DEFAULT_CACHE_LOCK_STALE_MS = 120_000;
+const DEFAULT_CACHE_LOCK_HEARTBEAT_MS = 5_000;
 const CACHE_LOCK_INITIAL_POLL_MS = 25;
 const CACHE_LOCK_MAX_POLL_MS = 500;
 const CACHE_LOCK_BACKOFF_FACTOR = 1.5;
@@ -182,6 +183,30 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+function readLockOwnerPid(lockPath: string): number | null {
+  try {
+    const lockContents = fs.readFileSync(lockPath, "utf-8");
+    const firstLine = lockContents.split(/\r?\n/u, 1)[0]?.trim();
+    if (!firstLine) return null;
+    if (!/^\d+$/u.test(firstLine)) return null;
+    const pid = Number.parseInt(firstLine, 10);
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    return pid;
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return code === "EPERM";
+  }
+}
+
 async function acquireCacheLock(lockPath: string): Promise<number> {
   const timeoutMs = parseDurationFromEnv(
     "IMAGEFORGE_CACHE_LOCK_TIMEOUT_MS",
@@ -209,6 +234,14 @@ async function acquireCacheLock(lockPath: string): Promise<number> {
       try {
         const stat = fs.statSync(lockPath);
         if (Date.now() - stat.mtimeMs > staleMs) {
+          const ownerPid = readLockOwnerPid(lockPath);
+          if (
+            ownerPid !== null &&
+            ownerPid !== process.pid &&
+            isProcessAlive(ownerPid)
+          ) {
+            // The lock owner is still alive; keep waiting instead of stealing the lock.
+          } else {
           try {
             fs.rmSync(lockPath);
           } catch (removeErr) {
@@ -218,6 +251,7 @@ async function acquireCacheLock(lockPath: string): Promise<number> {
             }
           }
           continue;
+          }
         }
       } catch (statErr) {
         const statCode = (statErr as NodeJS.ErrnoException).code;
@@ -240,7 +274,34 @@ async function acquireCacheLock(lockPath: string): Promise<number> {
   }
 }
 
-function releaseCacheLock(lockFd: number, lockPath: string) {
+function startCacheLockHeartbeat(lockFd: number, lockPath: string): NodeJS.Timeout {
+  const heartbeatMs = Math.max(
+    250,
+    parseDurationFromEnv("IMAGEFORGE_CACHE_LOCK_HEARTBEAT_MS", DEFAULT_CACHE_LOCK_HEARTBEAT_MS)
+  );
+  const timer = setInterval(() => {
+    const now = new Date();
+    try {
+      fs.futimesSync(lockFd, now, now);
+      return;
+    } catch {
+      // Fallback for filesystems that do not support futimes on this descriptor.
+    }
+
+    try {
+      fs.utimesSync(lockPath, now, now);
+    } catch {
+      // Best-effort heartbeat.
+    }
+  }, heartbeatMs);
+  timer.unref();
+  return timer;
+}
+
+function releaseCacheLock(lockFd: number, lockPath: string, heartbeatTimer: NodeJS.Timeout | null) {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+  }
   try {
     fs.closeSync(lockFd);
   } catch {
@@ -561,11 +622,13 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
 
   const cacheLockPath = `${cachePath}.lock`;
   let cacheLockFd: number | null = null;
+  let cacheLockHeartbeat: NodeJS.Timeout | null = null;
 
   try {
     if (options.useCache) {
       try {
         cacheLockFd = await acquireCacheLock(cacheLockPath);
+        cacheLockHeartbeat = startCacheLockHeartbeat(cacheLockFd, cacheLockPath);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to acquire cache lock.";
         addError(report, "CACHE_LOCK_FAILED", message);
@@ -888,7 +951,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     };
   } finally {
     if (cacheLockFd !== null) {
-      releaseCacheLock(cacheLockFd, cacheLockPath);
+      releaseCacheLock(cacheLockFd, cacheLockPath, cacheLockHeartbeat);
     }
   }
 }

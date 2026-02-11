@@ -9,7 +9,7 @@ updates:
       timezone: "Etc/UTC"
     open-pull-requests-limit: 10
     commit-message:
-      prefix: chore(deps)
+      prefix: chore
       include: scope
     groups:
       production-patch-minor:

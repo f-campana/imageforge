@@ -32,7 +32,7 @@ Allowed types include: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test
 ## Releases and Tags
 
 - Releases are automated by Release Please from Conventional Commits on `main`.
-- Tags are annotated SemVer tags with a `v` prefix (for example `v0.1.1`).
+- Tags follow SemVer with a `v` prefix (for example `v0.1.1`) and are managed by release automation.
 - npm publication is automated from GitHub `release.published` events via `.github/workflows/publish.yml`.
 - `NPM_TOKEN` must be configured in repository secrets for publish jobs.
 - Do not manually edit `CHANGELOG.md` for routine releases; it is generated via release automation.

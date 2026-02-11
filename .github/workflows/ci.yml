@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   commit-messages:
-    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'dependabot/')
+    if: github.event_name == 'pull_request'
     name: Commit Message Lint
     runs-on: ubuntu-latest
     steps:

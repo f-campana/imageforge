@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6](https://github.com/f-campana/imageforge/compare/v0.1.5...v0.1.6) (2026-02-13)
+
+
+### Features
+
+* **responsive:** finalize width-set behavior and contract ([022957c](https://github.com/f-campana/imageforge/commit/022957c640615c3abb45d1a7e3fb4cba961be558))
+
 ## [0.1.5](https://github.com/f-campana/imageforge/compare/v0.1.4...v0.1.5) (2026-02-11)
 
 

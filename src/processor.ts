@@ -3,6 +3,11 @@ import * as fs from "fs";
 import { promises as fsp } from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
+import {
+  normalizeRequestedWidths,
+  resolveEffectiveWidths,
+  resolveOrientedDimensions,
+} from "./responsive";
 
 export type OutputFormat = "webp" | "avif";
 
@@ -110,9 +115,7 @@ export function fileHash(filePath: string, options?: ProcessOptions): string {
 
   if (options) {
     const normalizedWidths =
-      options.widths === undefined
-        ? null
-        : [...new Set(options.widths)].sort((left, right) => left - right);
+      options.widths === undefined ? null : normalizeRequestedWidths(options.widths);
     hash.update(
       JSON.stringify({
         formats: [...options.formats].sort(),
@@ -170,17 +173,6 @@ export async function convertImage(
   return pipeline.toBuffer();
 }
 
-function resolveVariantWidths(sourceWidth: number, requestedWidths?: number[]): number[] {
-  if (requestedWidths === undefined || requestedWidths.length === 0) {
-    return [sourceWidth];
-  }
-  const eligible = requestedWidths.filter((requestedWidth) => requestedWidth <= sourceWidth);
-  if (eligible.length > 0) {
-    return eligible;
-  }
-  return [sourceWidth];
-}
-
 export async function processImage(
   filePath: string,
   inputDir: string,
@@ -196,12 +188,11 @@ export async function processImage(
   // Keep metadata extraction separate from conversion pipeline and normalize
   // dimensions from EXIF orientation here so manifest width/height match the
   // rotated outputs without depending on pipeline order side effects.
-  const baseWidth = metadata.width;
-  const baseHeight = metadata.height;
-  const orientation = metadata.orientation ?? 1;
-  const isQuarterTurn = orientation >= 5 && orientation <= 8;
-  const width = isQuarterTurn ? baseHeight : baseWidth;
-  const height = isQuarterTurn ? baseWidth : baseHeight;
+  const { width, height } = resolveOrientedDimensions(
+    metadata.width,
+    metadata.height,
+    metadata.orientation
+  );
 
   const result: ImageResult = {
     file: relativePath,
@@ -218,9 +209,12 @@ export async function processImage(
     result.blurDataURL = await generateBlurDataURL(buffer, options.blurSize);
   }
 
+  const normalizedRequestedWidths =
+    options.widths === undefined ? undefined : normalizeRequestedWidths(options.widths);
+
   // Convert to output formats
   for (const format of options.formats) {
-    if (options.widths === undefined || options.widths.length === 0) {
+    if (normalizedRequestedWidths === undefined || normalizedRequestedWidths.length === 0) {
       const outputBuffer = await convertImage(buffer, format, options.quality);
       const outputInOutputDir = outputPathFor(relativePath, format);
       const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
@@ -236,7 +230,7 @@ export async function processImage(
       continue;
     }
 
-    const variantWidths = resolveVariantWidths(width, options.widths);
+    const variantWidths = resolveEffectiveWidths(width, normalizedRequestedWidths);
     const variants: ImageVariant[] = [];
 
     for (const variantWidth of variantWidths) {

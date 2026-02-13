@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import pLimit from "p-limit";
+import sharp from "sharp";
 import {
   discoverImages,
   fileHash,
@@ -12,6 +13,7 @@ import {
   toPosix,
 } from "./processor";
 import type { DiscoveryWarning, ImageResult, OutputFormat, ProcessOptions } from "./processor";
+import { resolveEffectiveWidths, resolveOrientedDimensions } from "./responsive";
 import type { ImageForgeEntry, ImageForgeManifest, ImageForgeVariant } from "./types";
 
 interface CacheEntry {
@@ -139,6 +141,7 @@ const DEFAULT_CACHE_LOCK_HEARTBEAT_MS = 5_000;
 const CACHE_LOCK_INITIAL_POLL_MS = 25;
 const CACHE_LOCK_MAX_POLL_MS = 500;
 const CACHE_LOCK_BACKOFF_FACTOR = 1.5;
+const LIMIT_INPUT_PIXELS = 100_000_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -465,7 +468,15 @@ function resolveOutputPaths(
   return widths.map((width) => resolveOutputPath(relativePath, format, inputDir, outputDir, width));
 }
 
-function preflightCollisions(
+async function readImageWidthForPreflight(imagePath: string): Promise<number> {
+  const metadata = await sharp(imagePath, {
+    limitInputPixels: LIMIT_INPUT_PIXELS,
+  }).metadata();
+  const { width } = resolveOrientedDimensions(metadata.width, metadata.height, metadata.orientation);
+  return width;
+}
+
+async function preflightCollisions(
   items: ImageWorkItem[],
   options: ProcessOptions,
   inputDir: string,
@@ -473,7 +484,7 @@ function preflightCollisions(
   cache: Map<string, CacheEntry>,
   useCache: boolean,
   forceOverwrite: boolean
-): PreflightIssue | null {
+): Promise<PreflightIssue | null> {
   const planned = new Map<string, { source: string; outputPath: string }>();
   const cacheOwners = new Map<string, { source: string; outputPath: string }>();
 
@@ -484,13 +495,31 @@ function preflightCollisions(
   }
 
   for (const item of items) {
+    let effectiveWidths: number[] | undefined;
+    if (options.widths && options.widths.length > 0) {
+      try {
+        const sourceWidth = await readImageWidthForPreflight(item.imagePath);
+        effectiveWidths = resolveEffectiveWidths(sourceWidth, options.widths);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "unknown error";
+        return {
+          message: "Failed preflight width planning:",
+          details: [
+            `  • ${item.relativePath}`,
+            `  • ${message}`,
+            "Fix: verify source image is readable and valid before rerunning.",
+          ],
+        };
+      }
+    }
+
     for (const format of options.formats) {
       const outputPaths = resolveOutputPaths(
         item.relativePath,
         format,
         inputDir,
         outputDir,
-        options.widths
+        effectiveWidths
       );
 
       for (const outputPath of outputPaths) {
@@ -794,7 +823,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       }
     }
 
-    const collisionIssue = preflightCollisions(
+    const collisionIssue = await preflightCollisions(
       items,
       processOptions,
       inputDir,

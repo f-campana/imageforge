@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { MAX_WIDTH_COUNT, normalizeRequestedWidths } from "./responsive";
 
 export interface ImageForgeConfig {
   output?: string;
@@ -7,6 +8,7 @@ export interface ImageForgeConfig {
   quality?: number;
   blur?: boolean;
   blurSize?: number;
+  widths?: number[];
   cache?: boolean;
   forceOverwrite?: boolean;
   check?: boolean;
@@ -30,6 +32,7 @@ const ALLOWED_KEYS = new Set([
   "quality",
   "blur",
   "blurSize",
+  "widths",
   "cache",
   "forceOverwrite",
   "check",
@@ -94,6 +97,39 @@ function parseFormats(value: unknown, sourcePath: string): string | string[] | u
   return value;
 }
 
+function parseWidths(value: unknown, sourcePath: string): number[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new ConfigError(`Invalid "widths" in ${sourcePath}: expected number array.`);
+  }
+  if (value.length === 0) {
+    throw new ConfigError(`Invalid "widths" in ${sourcePath}: must include at least one width.`);
+  }
+
+  const parsed: number[] = [];
+  for (const [index, entry] of value.entries()) {
+    if (typeof entry !== "number" || !Number.isFinite(entry)) {
+      throw new ConfigError(
+        `Invalid "widths" in ${sourcePath}: expected number at index ${index.toString()}.`
+      );
+    }
+    if (!Number.isInteger(entry)) {
+      throw new ConfigError(
+        `Invalid "widths" in ${sourcePath}: expected integer at index ${index.toString()}.`
+      );
+    }
+    parsed.push(entry);
+  }
+
+  const normalized = normalizeRequestedWidths(parsed);
+  if (normalized.length > MAX_WIDTH_COUNT) {
+    throw new ConfigError(
+      `Invalid "widths" in ${sourcePath}: received ${normalized.length.toString()} unique widths, maximum is ${MAX_WIDTH_COUNT.toString()}.`
+    );
+  }
+  return normalized;
+}
+
 function parseConfig(value: unknown, sourcePath: string): ImageForgeConfig {
   if (!isRecord(value)) {
     throw new ConfigError(`Invalid config in ${sourcePath}: expected a JSON object.`);
@@ -111,6 +147,7 @@ function parseConfig(value: unknown, sourcePath: string): ImageForgeConfig {
     quality: parseNumber(value.quality, "quality", sourcePath),
     blur: parseBoolean(value.blur, "blur", sourcePath),
     blurSize: parseNumber(value.blurSize, "blurSize", sourcePath),
+    widths: parseWidths(value.widths, sourcePath),
     cache: parseBoolean(value.cache, "cache", sourcePath),
     forceOverwrite: parseBoolean(value.forceOverwrite, "forceOverwrite", sourcePath),
     check: parseBoolean(value.check, "check", sourcePath),

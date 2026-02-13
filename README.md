@@ -90,30 +90,40 @@ Write outputs to a dedicated directory:
 imageforge ./public/images --out-dir ./public/generated
 ```
 
+Generate responsive width variants:
+
+```bash
+imageforge ./public/images --formats webp,avif --widths 320,640,960,1280
+```
+
+`--widths` values are requested targets. ImageForge generates effective widths that do not exceed
+the source image dimensions (no upscaling).
+
 ## CLI Usage
 
 ```bash
 imageforge <directory> [options]
 ```
 
-| Option                                       | Description                                                            |
-| -------------------------------------------- | ---------------------------------------------------------------------- |
-| `-o, --output <path>`                        | Manifest output path (default: `imageforge.json`)                      |
-| `-f, --formats <formats>`                    | Output formats, comma-separated (default: `webp`)                      |
-| `-q, --quality <number>`                     | Output quality `1..100` (default: `80`)                                |
-| `--blur` / `--no-blur`                       | Enable/disable blur placeholder generation                             |
-| `--blur-size <number>`                       | Blur dimensions `1..256` (default: `4`)                                |
-| `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                      |
-| `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                            |
-| `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                   |
-| `--out-dir <path>`                           | Output directory for generated derivatives                             |
-| `--concurrency <number>`                     | Parallel processing (`1..64`, default: `min(8, availableParallelism)`) |
-| `--json` / `--no-json`                       | Emit machine-readable JSON report to stdout                            |
-| `--verbose` / `--no-verbose`                 | Show additional diagnostics                                            |
-| `--quiet` / `--no-quiet`                     | Suppress per-file non-error logs                                       |
-| `--config <path>`                            | Explicit JSON config path                                              |
-| `-V, --version`                              | Print version                                                          |
-| `-h, --help`                                 | Print help                                                             |
+| Option                                       | Description                                                                         |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `-o, --output <path>`                        | Manifest output path (default: `imageforge.json`)                                   |
+| `-f, --formats <formats>`                    | Output formats, comma-separated (default: `webp`)                                   |
+| `-q, --quality <number>`                     | Output quality `1..100` (default: `80`)                                             |
+| `--blur` / `--no-blur`                       | Enable/disable blur placeholder generation                                          |
+| `--blur-size <number>`                       | Blur dimensions `1..256` (default: `4`)                                             |
+| `--widths <list>`                            | Requested width targets as comma-separated integers (source-bounded, max 16 unique) |
+| `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                                   |
+| `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                                         |
+| `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                                |
+| `--out-dir <path>`                           | Output directory for generated derivatives                                          |
+| `--concurrency <number>`                     | Parallel processing (`1..64`, default: `min(8, availableParallelism)`)              |
+| `--json` / `--no-json`                       | Emit machine-readable JSON report to stdout                                         |
+| `--verbose` / `--no-verbose`                 | Show additional diagnostics                                                         |
+| `--quiet` / `--no-quiet`                     | Suppress per-file non-error logs                                                    |
+| `--config <path>`                            | Explicit JSON config path                                                           |
+| `-V, --version`                              | Print version                                                                       |
+| `-h, --help`                                 | Print help                                                                          |
 
 ## Runtime Behavior
 
@@ -123,6 +133,16 @@ imageforge <directory> [options]
 - Output collision checks are case-insensitive.
 - Existing outputs are protected unless explicitly overwritten with `--force-overwrite`.
 - With `--check`, ImageForge prints an exact copy-pastable rerun command.
+- Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
+- Requested widths are targets; generated effective widths may be smaller for source-bounded runs.
+- Width lists are capped at 16 unique values to bound compute and output fan-out.
+- Full behavior contract: `docs/product/responsive-widths-contract.md`.
+
+### Responsive Guardrail
+
+ImageForge enforces a maximum of 16 unique requested widths per run/config. This guard keeps
+responsive generation predictable and reduces accidental or hostile CPU/IO amplification from
+oversized width lists.
 
 ## Configuration
 
@@ -143,6 +163,7 @@ Example `imageforge.config.json`:
   "quality": 80,
   "blur": true,
   "blurSize": 4,
+  "widths": [320, 640, 960, 1280],
   "cache": true,
   "outDir": "public/generated",
   "concurrency": 4
@@ -161,6 +182,7 @@ The report includes:
 
 - Effective options
 - Per-image status (`processed`, `cached`, `failed`, `needs-processing`)
+- Effective generated widths in `images[*].variants[*].width` when `--widths` is used
 - Summary counters and size totals
 - Rerun command hint for `--check` failures
 
@@ -174,14 +196,28 @@ Manifest shape (`imageforge.json`):
   "generated": "2026-02-08T00:00:00.000Z",
   "images": {
     "hero.jpg": {
-      "width": 1200,
-      "height": 800,
+      "width": 1920,
+      "height": 1280,
       "aspectRatio": 1.5,
       "blurDataURL": "data:image/png;base64,...",
       "originalSize": 345678,
       "outputs": {
-        "webp": { "path": "hero.webp", "size": 98765 },
-        "avif": { "path": "hero.avif", "size": 65432 }
+        "webp": { "path": "hero.w1280.webp", "size": 50210 },
+        "avif": { "path": "hero.w1280.avif", "size": 31100 }
+      },
+      "variants": {
+        "webp": [
+          { "width": 320, "height": 213, "path": "hero.w320.webp", "size": 9012 },
+          { "width": 640, "height": 427, "path": "hero.w640.webp", "size": 17654 },
+          { "width": 960, "height": 640, "path": "hero.w960.webp", "size": 33210 },
+          { "width": 1280, "height": 853, "path": "hero.w1280.webp", "size": 50210 }
+        ],
+        "avif": [
+          { "width": 320, "height": 213, "path": "hero.w320.avif", "size": 6010 },
+          { "width": 640, "height": 427, "path": "hero.w640.avif", "size": 12203 },
+          { "width": 960, "height": 640, "path": "hero.w960.avif", "size": 21998 },
+          { "width": 1280, "height": 853, "path": "hero.w1280.avif", "size": 31100 }
+        ]
       },
       "hash": "abc123..."
     }
@@ -194,6 +230,8 @@ Notes:
 - Manifest keys and output paths are input-directory-relative POSIX paths.
 - When using `--out-dir`, output paths remain relative to the input directory.
 - If `--out-dir` is outside the input tree, manifest paths may include `../` segments.
+- When `--widths` is used, `outputs.<format>` points to the largest generated variant.
+- `variants[*].width` stores effective generated widths (requested values filtered by source size).
 
 ## Next.js Integration Example
 
@@ -211,6 +249,15 @@ Then use:
 
 - Original source path for `src`
 - `getImageData(src)?.blurDataURL` for `placeholder="blur"`
+
+Optional `srcset` helper for responsive variants:
+
+```ts
+export function getSrcSet(src: string, format: "webp" | "avif") {
+  const variants = (manifest as Manifest).images[src]?.variants?.[format];
+  return variants?.map((variant) => `${variant.path} ${variant.width}w`).join(", ");
+}
+```
 
 ## Programmatic API
 

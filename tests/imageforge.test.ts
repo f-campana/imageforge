@@ -370,8 +370,16 @@ describe("fileHash", () => {
     const filePath = path.join(FIXTURES, "photo.jpg");
     const options80 = { formats: ["webp" as const], quality: 80, blur: true, blurSize: 4 };
     const options60 = { formats: ["webp" as const], quality: 60, blur: true, blurSize: 4 };
+    const optionsWithWidths = {
+      formats: ["webp" as const],
+      quality: 80,
+      blur: true,
+      blurSize: 4,
+      widths: [320, 640],
+    };
 
     expect(fileHash(filePath, options80)).not.toBe(fileHash(filePath, options60));
+    expect(fileHash(filePath, options80)).not.toBe(fileHash(filePath, optionsWithWidths));
   });
 
   it("uses content hashing independent of file path", () => {
@@ -537,6 +545,72 @@ describe("processImage", () => {
     expect(fs.existsSync(path.join(outDir, "subdir", "nested.webp"))).toBe(true);
   });
 
+  it("generates responsive variants and keeps outputs as largest variant", async () => {
+    const result = await processImage(
+      path.join(FIXTURES, "photo.jpg"),
+      FIXTURES,
+      {
+        formats: ["webp"],
+        quality: 80,
+        blur: false,
+        blurSize: 4,
+        widths: [320, 640, 1200],
+      },
+      FIXTURES
+    );
+
+    expect(result.outputs.webp.path).toBe("photo.w640.webp");
+    expect(result.variants?.webp.map((variant) => variant.width)).toEqual([320, 640]);
+    expect(fs.existsSync(path.join(FIXTURES, "photo.w320.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(FIXTURES, "photo.w640.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(FIXTURES, "photo.w1200.webp"))).toBe(false);
+
+    fs.rmSync(path.join(FIXTURES, "photo.w320.webp"), { force: true });
+    fs.rmSync(path.join(FIXTURES, "photo.w640.webp"), { force: true });
+  });
+
+  it("normalizes unsorted API widths before selecting outputs", async () => {
+    const result = await processImage(
+      path.join(FIXTURES, "photo.jpg"),
+      FIXTURES,
+      {
+        formats: ["webp"],
+        quality: 80,
+        blur: false,
+        blurSize: 4,
+        widths: [640, 320, 1200, 320],
+      },
+      FIXTURES
+    );
+
+    expect(result.outputs.webp.path).toBe("photo.w640.webp");
+    expect(result.variants?.webp.map((variant) => variant.width)).toEqual([320, 640]);
+
+    fs.rmSync(path.join(FIXTURES, "photo.w320.webp"), { force: true });
+    fs.rmSync(path.join(FIXTURES, "photo.w640.webp"), { force: true });
+  });
+
+  it("falls back to source width when all requested widths are larger", async () => {
+    const result = await processImage(
+      path.join(FIXTURES, "subdir", "nested.jpg"),
+      FIXTURES,
+      {
+        formats: ["webp"],
+        quality: 80,
+        blur: false,
+        blurSize: 4,
+        widths: [320, 640],
+      },
+      FIXTURES
+    );
+
+    expect(result.outputs.webp.path).toBe(path.posix.join("subdir", "nested.w100.webp"));
+    expect(result.variants?.webp.map((variant) => variant.width)).toEqual([100]);
+    expect(fs.existsSync(path.join(FIXTURES, "subdir", "nested.w100.webp"))).toBe(true);
+
+    fs.rmSync(path.join(FIXTURES, "subdir", "nested.w100.webp"), { force: true });
+  });
+
   it("throws on corrupt image input", async () => {
     await expect(
       processImage(
@@ -669,6 +743,129 @@ describe("CLI integration", () => {
     expect(result.status).toBe(0);
     expect(fs.existsSync(path.join(dir, "dual.webp"))).toBe(true);
     expect(fs.existsSync(path.join(dir, "dual.avif"))).toBe(true);
+  });
+
+  it("supports --widths with deduped ascending variants", () => {
+    const dir = path.join(cliDir, "widths-dedupe");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(cliDir, "test.jpg"), path.join(dir, "asset.jpg"));
+
+    const outputManifest = path.join(OUTPUT, "widths-dedupe.json");
+    const result = runCli([dir, "--widths", "300,100,300,200", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Requested widths:");
+    expect(result.stdout).toContain("never upscale source images");
+
+    expect(fs.existsSync(path.join(dir, "asset.w100.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "asset.w200.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "asset.w300.webp"))).toBe(true);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<
+        string,
+        {
+          outputs: { webp: { path: string } };
+          variants?: { webp?: { width: number }[] };
+        }
+      >;
+    };
+
+    expect(manifest.images["asset.jpg"].outputs.webp.path).toBe("asset.w300.webp");
+    expect(manifest.images["asset.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      100, 200, 300,
+    ]);
+  });
+
+  it("invalidates cache when widths set changes", () => {
+    const dir = path.join(cliDir, "widths-cache");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(path.join(cliDir, "test.jpg"), path.join(dir, "asset.jpg"));
+
+    const outputManifest = path.join(OUTPUT, "widths-cache.json");
+    const first = runCli([dir, "--widths", "100,200", "-o", outputManifest]);
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain("1 processed");
+
+    const second = runCli([dir, "--widths", "100,200", "-o", outputManifest]);
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain("(cached)");
+
+    const third = runCli([dir, "--widths", "100,150", "-o", outputManifest]);
+    expect(third.status).toBe(0);
+    expect(third.stdout).toContain("1 processed");
+    expect(fs.existsSync(path.join(dir, "asset.w150.webp"))).toBe(true);
+  });
+
+  it("rejects more than 16 unique requested widths", () => {
+    const widths = Array.from({ length: 17 }, (_, index) => (index + 1).toString()).join(",");
+    const result = runCli([cliDir, "-o", manifestPath, "--widths", widths]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Maximum is 16");
+  });
+
+  it("accepts exactly 16 unique requested widths", async () => {
+    const dir = path.join(cliDir, "widths-cap-16");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "asset.jpg"), 64, 48, { r: 1, g: 2, b: 3 });
+
+    const widths = Array.from({ length: 16 }, (_, index) => (index + 1).toString()).join(",");
+    const outputManifest = path.join(OUTPUT, "widths-cap-16.json");
+    const result = runCli([dir, "--widths", widths, "-o", outputManifest]);
+    expect(result.status).toBe(0);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<string, { variants?: { webp?: { width: number }[] } }>;
+    };
+    expect(manifest.images["asset.jpg"].variants?.webp).toHaveLength(16);
+  });
+
+  it("normalizes duplicate and edge width values deterministically", async () => {
+    const dir = path.join(cliDir, "widths-extremes");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "asset.jpg"), 64, 48, { r: 9, g: 8, b: 7 });
+
+    const outputManifest = path.join(OUTPUT, "widths-extremes.json");
+    const result = runCli([dir, "--widths", "64,1,16384,1,64", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<
+        string,
+        { outputs: { webp: { path: string } }; variants?: { webp?: { width: number }[] } }
+      >;
+    };
+    expect(manifest.images["asset.jpg"].outputs.webp.path).toBe("asset.w64.webp");
+    expect(manifest.images["asset.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      1, 64,
+    ]);
+  });
+
+  it("falls back to source width when all requested widths are larger", async () => {
+    const dir = path.join(cliDir, "widths-fallback");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "tiny.jpg"), 80, 60, { r: 12, g: 34, b: 56 });
+
+    const outputManifest = path.join(OUTPUT, "widths-fallback.json");
+    const result = runCli([dir, "--widths", "320,640", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(path.join(dir, "tiny.w80.webp"))).toBe(true);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<
+        string,
+        { outputs: { webp: { path: string } }; variants?: { webp?: { width: number }[] } }
+      >;
+    };
+
+    expect(manifest.images["tiny.jpg"].outputs.webp.path).toBe("tiny.w80.webp");
+    expect(manifest.images["tiny.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      80,
+    ]);
   });
 
   it("processes files with spaces and unicode names", async () => {
@@ -1026,6 +1223,61 @@ describe("CLI integration", () => {
     expect(result.stderr).toContain("Output collision detected");
   });
 
+  it("rejects responsive output collisions case-insensitively", async () => {
+    const dir = path.join(cliDir, "collision-case-insensitive-widths");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    await createJpeg(path.join(dir, "hero.jpg"), 40, 40, { r: 255, g: 0, b: 0 });
+    await createPng(path.join(dir, "Hero.png"), 40, 40, { r: 0, g: 0, b: 255 });
+
+    const result = runCli([
+      dir,
+      "--widths",
+      "20,40",
+      "-o",
+      path.join(OUTPUT, "collision-case-widths.json"),
+    ]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Output collision detected");
+  });
+
+  it("does not raise responsive collisions when effective widths differ", async () => {
+    const dir = path.join(cliDir, "collision-case-effective-widths");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    await createJpeg(path.join(dir, "hero.jpg"), 240, 160, { r: 255, g: 0, b: 0 });
+    await createPng(path.join(dir, "Hero.png"), 40, 40, { r: 0, g: 0, b: 255 });
+
+    const outputManifest = path.join(OUTPUT, "collision-case-effective-widths.json");
+    const result = runCli([dir, "--widths", "160,320", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("Output collision detected");
+
+    expect(fs.existsSync(path.join(dir, "hero.w160.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "Hero.w40.webp"))).toBe(true);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<
+        string,
+        {
+          outputs: { webp: { path: string } };
+          variants?: { webp?: { width: number }[] };
+        }
+      >;
+    };
+
+    expect(manifest.images["hero.jpg"].outputs.webp.path).toBe("hero.w160.webp");
+    expect(manifest.images["Hero.png"].outputs.webp.path).toBe("Hero.w40.webp");
+    expect(manifest.images["hero.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      160,
+    ]);
+    expect(manifest.images["Hero.png"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      40,
+    ]);
+  });
+
   it("--check passes when all files are up to date", async () => {
     const dir = path.join(cliDir, "check-clean");
     fs.rmSync(dir, { recursive: true, force: true });
@@ -1062,6 +1314,8 @@ describe("CLI integration", () => {
       "--no-blur",
       "--blur-size",
       "8",
+      "--widths",
+      "120,240",
       "--concurrency",
       "3",
       "--out-dir",
@@ -1074,6 +1328,7 @@ describe("CLI integration", () => {
     expect(result.stdout).toContain("--quality 70");
     expect(result.stdout).toContain("--no-blur");
     expect(result.stdout).toContain("--blur-size 8");
+    expect(result.stdout).toContain("--widths 120,240");
     expect(result.stdout).toContain("--concurrency 3");
     expect(result.stdout).toContain("--out-dir");
   });
@@ -1166,6 +1421,13 @@ describe("CLI integration", () => {
     expect(result.stdout.trim()).toBe(PACKAGE_VERSION);
   });
 
+  it("documents requested width target behavior in --help output", () => {
+    const result = runCli(["--help"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Requested responsive width targets");
+    expect(result.stdout).toContain("generated widths are source-bounded");
+  });
+
   it("fails fast for invalid --blur-size values", () => {
     const result = runCli([cliDir, "-o", manifestPath, "--blur-size", "-1"]);
     expect(result.status).toBe(1);
@@ -1176,6 +1438,16 @@ describe("CLI integration", () => {
     const result = runCli([cliDir, "-o", manifestPath, "--quality", "0"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Invalid quality");
+  });
+
+  it("fails fast for invalid --widths ranges", () => {
+    const tooSmall = runCli([cliDir, "-o", manifestPath, "--widths", "0,200"]);
+    expect(tooSmall.status).toBe(1);
+    expect(tooSmall.stderr).toContain("Invalid width");
+
+    const tooLarge = runCli([cliDir, "-o", manifestPath, "--widths", "320,20000"]);
+    expect(tooLarge.status).toBe(1);
+    expect(tooLarge.stderr).toContain("Invalid width");
   });
 
   it("rejects malformed numeric CLI values", () => {
@@ -1193,6 +1465,15 @@ describe("CLI integration", () => {
     expect(malformedConcurrency.status).toBe(1);
     expect(malformedConcurrency.stderr).toContain("Invalid concurrency");
     expect(malformedConcurrency.stderr).toContain("valid integer");
+
+    const malformedWidths = runCli([cliDir, "-o", manifestPath, "--widths", "320,2abc"]);
+    expect(malformedWidths.status).toBe(1);
+    expect(malformedWidths.stderr).toContain("Invalid width");
+    expect(malformedWidths.stderr).toContain("valid integer");
+
+    const emptyWidthsToken = runCli([cliDir, "-o", manifestPath, "--widths", "320,,640"]);
+    expect(emptyWidthsToken.status).toBe(1);
+    expect(emptyWidthsToken.stderr).toContain("Invalid widths: empty value");
   });
 
   it("validates idempotency of manifest content except generated timestamp", async () => {
@@ -1247,6 +1528,7 @@ describe("config support", () => {
           quality: 70,
           blur: false,
           blurSize: 6,
+          widths: [32, 64],
           concurrency: 2,
           quiet: true,
         },
@@ -1266,10 +1548,31 @@ describe("config support", () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(configDir, "from-cli.json"), "utf-8")
     ) as {
-      images: Record<string, { outputs: Record<string, unknown>; blurDataURL: string }>;
+      images: Record<
+        string,
+        {
+          outputs: {
+            webp: { path: string };
+            avif: { path: string };
+          };
+          variants?: {
+            webp?: { width: number }[];
+            avif?: { width: number }[];
+          };
+          blurDataURL: string;
+        }
+      >;
     };
 
     expect(Object.keys(manifest.images["cfg.jpg"].outputs)).toEqual(["webp", "avif"]);
+    expect(manifest.images["cfg.jpg"].outputs.webp.path).toBe("cfg.w64.webp");
+    expect(manifest.images["cfg.jpg"].outputs.avif.path).toBe("cfg.w64.avif");
+    expect(manifest.images["cfg.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      32, 64,
+    ]);
+    expect(manifest.images["cfg.jpg"].variants?.avif?.map((variant) => variant.width)).toEqual([
+      32, 64,
+    ]);
     expect(manifest.images["cfg.jpg"].blurDataURL).toBe("");
   });
 
@@ -1394,6 +1697,41 @@ describe("config support", () => {
     const result = runCli(["."], configDir);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Invalid quality in");
+    expect(result.stderr).toContain("imageforge.config.json");
+  });
+
+  it("includes config source path in width range validation errors", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify(
+        {
+          widths: [0, 64],
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], configDir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Invalid width in");
+    expect(result.stderr).toContain("imageforge.config.json");
+  });
+
+  it("includes config source path in width-count cap validation errors", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify({
+        widths: Array.from({ length: 17 }, (_, index) => index + 1),
+      })
+    );
+
+    const outputManifest = path.join(configDir, "too-many-widths.json");
+    const result = runCli([".", "--output", outputManifest], configDir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Invalid "widths" in');
+    expect(result.stderr).toContain("maximum is 16");
     expect(result.stderr).toContain("imageforge.config.json");
   });
 

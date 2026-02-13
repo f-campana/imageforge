@@ -3,6 +3,11 @@ import * as fs from "fs";
 import { promises as fsp } from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
+import {
+  normalizeRequestedWidths,
+  resolveEffectiveWidths,
+  resolveOrientedDimensions,
+} from "./responsive";
 
 export type OutputFormat = "webp" | "avif";
 
@@ -14,6 +19,14 @@ export interface ImageResult {
   blurDataURL: string;
   originalSize: number;
   outputs: Record<string, { path: string; size: number }>;
+  variants?: Record<string, ImageVariant[]>;
+}
+
+export interface ImageVariant {
+  width: number;
+  height: number;
+  path: string;
+  size: number;
 }
 
 export interface ProcessOptions {
@@ -21,6 +34,7 @@ export interface ProcessOptions {
   quality: number;
   blur: boolean;
   blurSize: number;
+  widths?: number[];
 }
 
 export interface DiscoveryWarning {
@@ -45,9 +59,10 @@ export function fromPosix(filePath: string): string {
   return filePath.split("/").join(path.sep);
 }
 
-export function outputPathFor(relativePath: string, format: OutputFormat): string {
+export function outputPathFor(relativePath: string, format: OutputFormat, width?: number): string {
   const parsed = path.posix.parse(toPosix(relativePath));
-  return path.posix.join(parsed.dir, `${parsed.name}.${format}`);
+  const widthSuffix = width === undefined ? "" : `.w${width.toString()}`;
+  return path.posix.join(parsed.dir, `${parsed.name}${widthSuffix}.${format}`);
 }
 
 export function discoverImages(
@@ -99,12 +114,15 @@ export function fileHash(filePath: string, options?: ProcessOptions): string {
   const hash = crypto.createHash("sha256").update(content);
 
   if (options) {
+    const normalizedWidths =
+      options.widths === undefined ? null : normalizeRequestedWidths(options.widths);
     hash.update(
       JSON.stringify({
         formats: [...options.formats].sort(),
         quality: options.quality,
         blur: options.blur,
         blurSize: options.blurSize,
+        widths: normalizedWidths,
       })
     );
   }
@@ -125,9 +143,17 @@ export async function generateBlurDataURL(buffer: Buffer, size = 4): Promise<str
 export async function convertImage(
   buffer: Buffer,
   format: OutputFormat,
-  quality: number
+  quality: number,
+  width?: number
 ): Promise<Buffer> {
   let pipeline = sharp(buffer, { limitInputPixels: LIMIT_INPUT_PIXELS }).rotate();
+  if (width !== undefined) {
+    pipeline = pipeline.resize({
+      width,
+      fit: "inside",
+      withoutEnlargement: true,
+    });
+  }
 
   if (format === "webp") {
     pipeline = pipeline.webp({
@@ -162,12 +188,11 @@ export async function processImage(
   // Keep metadata extraction separate from conversion pipeline and normalize
   // dimensions from EXIF orientation here so manifest width/height match the
   // rotated outputs without depending on pipeline order side effects.
-  const baseWidth = metadata.width;
-  const baseHeight = metadata.height;
-  const orientation = metadata.orientation ?? 1;
-  const isQuarterTurn = orientation >= 5 && orientation <= 8;
-  const width = isQuarterTurn ? baseHeight : baseWidth;
-  const height = isQuarterTurn ? baseWidth : baseHeight;
+  const { width, height } = resolveOrientedDimensions(
+    metadata.width,
+    metadata.height,
+    metadata.orientation
+  );
 
   const result: ImageResult = {
     file: relativePath,
@@ -184,21 +209,58 @@ export async function processImage(
     result.blurDataURL = await generateBlurDataURL(buffer, options.blurSize);
   }
 
+  const normalizedRequestedWidths =
+    options.widths === undefined ? undefined : normalizeRequestedWidths(options.widths);
+
   // Convert to output formats
   for (const format of options.formats) {
-    const outputBuffer = await convertImage(buffer, format, options.quality);
-    const outputInOutputDir = outputPathFor(relativePath, format);
-    const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
-    const outputRelPath = toPosix(path.relative(inputDir, outputFullPath));
+    if (normalizedRequestedWidths === undefined || normalizedRequestedWidths.length === 0) {
+      const outputBuffer = await convertImage(buffer, format, options.quality);
+      const outputInOutputDir = outputPathFor(relativePath, format);
+      const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
+      const outputRelPath = toPosix(path.relative(inputDir, outputFullPath));
 
+      result.outputs[format] = {
+        path: outputRelPath,
+        size: outputBuffer.length,
+      };
+
+      await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
+      await fsp.writeFile(outputFullPath, outputBuffer);
+      continue;
+    }
+
+    const variantWidths = resolveEffectiveWidths(width, normalizedRequestedWidths);
+    const variants: ImageVariant[] = [];
+
+    for (const variantWidth of variantWidths) {
+      const outputBuffer = await convertImage(buffer, format, options.quality, variantWidth);
+      const outputInOutputDir = outputPathFor(relativePath, format, variantWidth);
+      const outputFullPath = path.resolve(outputDir, fromPosix(outputInOutputDir));
+      const outputRelPath = toPosix(path.relative(inputDir, outputFullPath));
+      const variantHeight =
+        height > 0 ? Math.max(1, Math.round((variantWidth / width) * height)) : 0;
+
+      variants.push({
+        width: variantWidth,
+        height: variantHeight,
+        path: outputRelPath,
+        size: outputBuffer.length,
+      });
+
+      // Write output file in the configured output root.
+      await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
+      await fsp.writeFile(outputFullPath, outputBuffer);
+    }
+
+    result.variants ??= {};
+    result.variants[format] = variants;
+
+    const selectedOutput = variants[variants.length - 1];
     result.outputs[format] = {
-      path: outputRelPath,
-      size: outputBuffer.length,
+      path: selectedOutput.path,
+      size: selectedOutput.size,
     };
-
-    // Write output file in the configured output root.
-    await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
-    await fsp.writeFile(outputFullPath, outputBuffer);
   }
 
   return result;

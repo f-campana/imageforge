@@ -98,7 +98,7 @@ describe("packaged install e2e", () => {
 
     const run = runCommand(
       "npx",
-      ["imageforge", inputDir, "-o", manifestPath, "-f", "webp,avif"],
+      ["imageforge", inputDir, "-o", manifestPath, "-f", "webp,avif", "--widths", "48,96,160"],
       consumerDir,
       {
         npm_config_cache: npmCacheDir,
@@ -107,13 +107,31 @@ describe("packaged install e2e", () => {
 
     expect(run.status).toBe(0);
     expect(fs.existsSync(manifestPath)).toBe(true);
-    expect(fs.existsSync(path.join(inputDir, "fixture.webp"))).toBe(true);
-    expect(fs.existsSync(path.join(inputDir, "fixture.avif"))).toBe(true);
+    expect(fs.existsSync(path.join(inputDir, "fixture.w48.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(inputDir, "fixture.w96.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(inputDir, "fixture.w160.webp"))).toBe(false);
+    expect(fs.existsSync(path.join(inputDir, "fixture.w48.avif"))).toBe(true);
+    expect(fs.existsSync(path.join(inputDir, "fixture.w96.avif"))).toBe(true);
+    expect(fs.existsSync(path.join(inputDir, "fixture.w160.avif"))).toBe(false);
 
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as {
-      images: Record<string, { outputs: Record<string, unknown> }>;
+      images: Record<
+        string,
+        {
+          outputs: Record<string, { path: string }>;
+          variants?: Partial<Record<string, { width: number }[]>>;
+        }
+      >;
     };
     expect(manifest.images["fixture.jpg"]).toBeDefined();
     expect(Object.keys(manifest.images["fixture.jpg"].outputs)).toEqual(["webp", "avif"]);
+    expect(manifest.images["fixture.jpg"].outputs.webp.path).toBe("fixture.w96.webp");
+    expect(manifest.images["fixture.jpg"].outputs.avif.path).toBe("fixture.w96.avif");
+    expect(manifest.images["fixture.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      48, 96,
+    ]);
+    expect(manifest.images["fixture.jpg"].variants?.avif?.map((variant) => variant.width)).toEqual([
+      48, 96,
+    ]);
   }, 180_000);
 });

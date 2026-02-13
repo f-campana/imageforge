@@ -93,13 +93,15 @@ function parseFormatsInput(value: string | string[]): string[] {
 
 function normalizeWidths(widths: number[]): number[] {
   if (widths.length === 0) {
-    throw new Error("Invalid widths: must include at least one width.");
+    throw new Error("Invalid requested widths: must include at least one width.");
   }
 
   const uniqueSorted = Array.from(new Set(widths)).sort((left, right) => left - right);
   for (const width of uniqueSorted) {
     if (width < 1 || width > 16_384) {
-      throw new Error(`Invalid widths: "${width.toString()}". Must be between 1 and 16384.`);
+      throw new Error(
+        `Invalid width in requested widths: "${width.toString()}". Must be between 1 and 16384.`
+      );
     }
   }
   return uniqueSorted;
@@ -267,13 +269,13 @@ function resolveOptions(
   if (resolved.widths !== null) {
     if (resolved.widths.length === 0) {
       const sourceHint = widthsFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
-      throw new Error(`Invalid widths${sourceHint}: must include at least one width.`);
+      throw new Error(`Invalid requested widths${sourceHint}: must include at least one width.`);
     }
     const invalidWidth = resolved.widths.find((width) => width < 1 || width > 16_384);
     if (invalidWidth !== undefined) {
       const sourceHint = widthsFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
       throw new Error(
-        `Invalid width${sourceHint}: "${invalidWidth.toString()}". Must be between 1 and 16384.`
+        `Invalid width${sourceHint}: "${invalidWidth.toString()}". Must be between 1 and 16384 for requested width targets.`
       );
     }
     resolved.widths = normalizeWidths(resolved.widths);
@@ -325,7 +327,7 @@ program
   .option("--blur-size <number>", "Blur placeholder dimensions 1..256 (default: 4)")
   .option(
     "--widths <list>",
-    "Responsive width set as comma-separated integers (example: 320,640,960)"
+    "Requested responsive width targets (comma-separated); generated widths are source-bounded"
   )
   .option("--cache", "Enable file hash caching")
   .option("--no-cache", "Disable file hash caching")

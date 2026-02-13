@@ -1,5 +1,6 @@
 export const MIN_WIDTH = 1;
 export const MAX_WIDTH = 16_384;
+export const MAX_WIDTH_COUNT = 16;
 
 export interface OrientedDimensions {
   width: number;

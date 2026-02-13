@@ -472,7 +472,11 @@ async function readImageWidthForPreflight(imagePath: string): Promise<number> {
   const metadata = await sharp(imagePath, {
     limitInputPixels: LIMIT_INPUT_PIXELS,
   }).metadata();
-  const { width } = resolveOrientedDimensions(metadata.width, metadata.height, metadata.orientation);
+  const { width } = resolveOrientedDimensions(
+    metadata.width,
+    metadata.height,
+    metadata.orientation
+  );
   return width;
 }
 

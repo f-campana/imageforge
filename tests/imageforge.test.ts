@@ -796,6 +796,52 @@ describe("CLI integration", () => {
     expect(fs.existsSync(path.join(dir, "asset.w150.webp"))).toBe(true);
   });
 
+  it("rejects more than 16 unique requested widths", () => {
+    const widths = Array.from({ length: 17 }, (_, index) => (index + 1).toString()).join(",");
+    const result = runCli([cliDir, "-o", manifestPath, "--widths", widths]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Maximum is 16");
+  });
+
+  it("accepts exactly 16 unique requested widths", async () => {
+    const dir = path.join(cliDir, "widths-cap-16");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "asset.jpg"), 64, 48, { r: 1, g: 2, b: 3 });
+
+    const widths = Array.from({ length: 16 }, (_, index) => (index + 1).toString()).join(",");
+    const outputManifest = path.join(OUTPUT, "widths-cap-16.json");
+    const result = runCli([dir, "--widths", widths, "-o", outputManifest]);
+    expect(result.status).toBe(0);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<string, { variants?: { webp?: { width: number }[] } }>;
+    };
+    expect(manifest.images["asset.jpg"].variants?.webp).toHaveLength(16);
+  });
+
+  it("normalizes duplicate and edge width values deterministically", async () => {
+    const dir = path.join(cliDir, "widths-extremes");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "asset.jpg"), 64, 48, { r: 9, g: 8, b: 7 });
+
+    const outputManifest = path.join(OUTPUT, "widths-extremes.json");
+    const result = runCli([dir, "--widths", "64,1,16384,1,64", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<
+        string,
+        { outputs: { webp: { path: string } }; variants?: { webp?: { width: number }[] } }
+      >;
+    };
+    expect(manifest.images["asset.jpg"].outputs.webp.path).toBe("asset.w64.webp");
+    expect(manifest.images["asset.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      1, 64,
+    ]);
+  });
+
   it("falls back to source width when all requested widths are larger", async () => {
     const dir = path.join(cliDir, "widths-fallback");
     fs.rmSync(dir, { recursive: true, force: true });
@@ -1660,6 +1706,23 @@ describe("config support", () => {
     const result = runCli(["."], configDir);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Invalid width in");
+    expect(result.stderr).toContain("imageforge.config.json");
+  });
+
+  it("includes config source path in width-count cap validation errors", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify({
+        widths: Array.from({ length: 17 }, (_, index) => index + 1),
+      })
+    );
+
+    const outputManifest = path.join(configDir, "too-many-widths.json");
+    const result = runCli([".", "--output", outputManifest], configDir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Invalid "widths" in');
+    expect(result.stderr).toContain("maximum is 16");
     expect(result.stderr).toContain("imageforge.config.json");
   });
 

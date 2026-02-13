@@ -109,7 +109,7 @@ imageforge <directory> [options]
 | `-q, --quality <number>`                     | Output quality `1..100` (default: `80`)                                |
 | `--blur` / `--no-blur`                       | Enable/disable blur placeholder generation                             |
 | `--blur-size <number>`                       | Blur dimensions `1..256` (default: `4`)                                |
-| `--widths <list>`                            | Responsive widths as comma-separated integers (opt-in)                 |
+| `--widths <list>`                            | Responsive widths as comma-separated integers (opt-in, max 16 unique)  |
 | `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                      |
 | `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                            |
 | `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                   |
@@ -131,6 +131,13 @@ imageforge <directory> [options]
 - Existing outputs are protected unless explicitly overwritten with `--force-overwrite`.
 - With `--check`, ImageForge prints an exact copy-pastable rerun command.
 - Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
+- Width lists are capped at 16 unique values to bound compute and output fan-out.
+
+### Responsive Guardrail
+
+ImageForge enforces a maximum of 16 unique requested widths per run/config. This guard keeps
+responsive generation predictable and reduces accidental or hostile CPU/IO amplification from
+oversized width lists.
 
 ## Configuration
 

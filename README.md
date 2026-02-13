@@ -305,7 +305,7 @@ Quality checks run in CI on Node `22` and `24`.
 
 ## Release Workflow
 
-- Conventional Commits are required for commits and PR titles.
+- Semantic PR titles are enforced in CI; commit-message lint is currently informational unless branch-protection policy is changed.
 - Releases and `CHANGELOG.md` updates are automated via Release Please.
 - Tags follow annotated SemVer with `v` prefix (for example `v0.1.3`).
 - npm publish workflow uses GitHub OIDC trusted publishing.

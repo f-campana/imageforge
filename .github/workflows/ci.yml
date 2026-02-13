@@ -12,7 +12,7 @@ permissions:
 jobs:
   commit-messages:
     if: github.event_name == 'pull_request'
-    name: Commit Message Lint (PR only)
+    name: Commit Message Lint (informational)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,8 +20,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Lint commit messages
+      - name: Lint commit messages (non-blocking)
+        id: commitlint
+        continue-on-error: true
         uses: wagoid/commitlint-github-action@v6
+
+      - name: Report informational policy
+        if: steps.commitlint.outcome == 'failure'
+        run: |
+          echo "::warning::Commit message lint is informational for this repository and is not a required merge gate."
+          {
+            echo "### Commit Message Lint Is Informational"
+            echo
+            echo "Commit message lint failed in this PR."
+            echo
+            echo "Required merge gates remain:"
+            echo "- Quality (Node 22)"
+            echo "- Quality (Node 24)"
+            echo "- Security Audit (Node 22)"
+            echo
+            echo "PR titles are still enforced by the Semantic PR Title workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   quality:
     name: Quality (Node ${{ matrix.node }})

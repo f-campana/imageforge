@@ -569,6 +569,27 @@ describe("processImage", () => {
     fs.rmSync(path.join(FIXTURES, "photo.w640.webp"), { force: true });
   });
 
+  it("normalizes unsorted API widths before selecting outputs", async () => {
+    const result = await processImage(
+      path.join(FIXTURES, "photo.jpg"),
+      FIXTURES,
+      {
+        formats: ["webp"],
+        quality: 80,
+        blur: false,
+        blurSize: 4,
+        widths: [640, 320, 1200, 320],
+      },
+      FIXTURES
+    );
+
+    expect(result.outputs.webp.path).toBe("photo.w640.webp");
+    expect(result.variants?.webp.map((variant) => variant.width)).toEqual([320, 640]);
+
+    fs.rmSync(path.join(FIXTURES, "photo.w320.webp"), { force: true });
+    fs.rmSync(path.join(FIXTURES, "photo.w640.webp"), { force: true });
+  });
+
   it("falls back to source width when all requested widths are larger", async () => {
     const result = await processImage(
       path.join(FIXTURES, "subdir", "nested.jpg"),
@@ -1171,6 +1192,42 @@ describe("CLI integration", () => {
     ]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Output collision detected");
+  });
+
+  it("does not raise responsive collisions when effective widths differ", async () => {
+    const dir = path.join(cliDir, "collision-case-effective-widths");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    await createJpeg(path.join(dir, "hero.jpg"), 240, 160, { r: 255, g: 0, b: 0 });
+    await createPng(path.join(dir, "Hero.png"), 40, 40, { r: 0, g: 0, b: 255 });
+
+    const outputManifest = path.join(OUTPUT, "collision-case-effective-widths.json");
+    const result = runCli([dir, "--widths", "160,320", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("Output collision detected");
+
+    expect(fs.existsSync(path.join(dir, "hero.w160.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "Hero.w40.webp"))).toBe(true);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<
+        string,
+        {
+          outputs: { webp: { path: string } };
+          variants?: { webp?: { width: number }[] };
+        }
+      >;
+    };
+
+    expect(manifest.images["hero.jpg"].outputs.webp.path).toBe("hero.w160.webp");
+    expect(manifest.images["Hero.png"].outputs.webp.path).toBe("Hero.w40.webp");
+    expect(manifest.images["hero.jpg"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      160,
+    ]);
+    expect(manifest.images["Hero.png"].variants?.webp?.map((variant) => variant.width)).toEqual([
+      40,
+    ]);
   });
 
   it("--check passes when all files are up to date", async () => {

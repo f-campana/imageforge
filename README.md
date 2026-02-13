@@ -136,6 +136,7 @@ imageforge <directory> [options]
 - Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
 - Requested widths are targets; generated effective widths may be smaller for source-bounded runs.
 - Width lists are capped at 16 unique values to bound compute and output fan-out.
+- Full behavior contract: `docs/product/responsive-widths-contract.md`.
 
 ### Responsive Guardrail
 
@@ -195,8 +196,8 @@ Manifest shape (`imageforge.json`):
   "generated": "2026-02-08T00:00:00.000Z",
   "images": {
     "hero.jpg": {
-      "width": 1200,
-      "height": 800,
+      "width": 1920,
+      "height": 1280,
       "aspectRatio": 1.5,
       "blurDataURL": "data:image/png;base64,...",
       "originalSize": 345678,

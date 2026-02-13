@@ -754,6 +754,8 @@ describe("CLI integration", () => {
     const outputManifest = path.join(OUTPUT, "widths-dedupe.json");
     const result = runCli([dir, "--widths", "300,100,300,200", "-o", outputManifest]);
     expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Requested widths:");
+    expect(result.stdout).toContain("never upscale source images");
 
     expect(fs.existsSync(path.join(dir, "asset.w100.webp"))).toBe(true);
     expect(fs.existsSync(path.join(dir, "asset.w200.webp"))).toBe(true);
@@ -1371,6 +1373,13 @@ describe("CLI integration", () => {
     const result = runCli(["--version"]);
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe(PACKAGE_VERSION);
+  });
+
+  it("documents requested width target behavior in --help output", () => {
+    const result = runCli(["--help"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Requested responsive width targets");
+    expect(result.stdout).toContain("generated widths are source-bounded");
   });
 
   it("fails fast for invalid --blur-size values", () => {

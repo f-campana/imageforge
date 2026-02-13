@@ -472,7 +472,11 @@ async function readImageWidthForPreflight(imagePath: string): Promise<number> {
   const metadata = await sharp(imagePath, {
     limitInputPixels: LIMIT_INPUT_PIXELS,
   }).metadata();
-  const { width } = resolveOrientedDimensions(metadata.width, metadata.height, metadata.orientation);
+  const { width } = resolveOrientedDimensions(
+    metadata.width,
+    metadata.height,
+    metadata.orientation
+  );
   return width;
 }
 
@@ -778,7 +782,10 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       );
       if (options.widths && options.widths.length > 0) {
         printInfo(
-          `Widths: ${options.widths.map((width) => chalk.cyan(width.toString())).join(", ")}`
+          `Requested widths: ${options.widths.map((width) => chalk.cyan(width.toString())).join(", ")}`
+        );
+        printInfo(
+          chalk.dim("Generated widths are effective values and never upscale source images.")
         );
       }
       printInfo(

@@ -14,15 +14,18 @@ This note defines the invariant flow used for responsive output planning and gen
 `src/responsive.ts` provides shared utilities used by both planning and processing:
 
 1. `normalizeRequestedWidths(widths)`
+
 - Removes duplicates.
 - Returns ascending order.
 
 2. `resolveEffectiveWidths(sourceWidth, requestedWidths)`
+
 - Uses normalized requested widths.
 - Keeps only values `<= sourceWidth`.
 - Falls back to `[sourceWidth]` when none are eligible.
 
 3. `resolveOrientedDimensions(width, height, orientation)`
+
 - Applies EXIF orientation normalization so width/height are aligned with rotated output behavior.
 
 ## Planning vs Processing

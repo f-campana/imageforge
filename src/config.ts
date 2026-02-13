@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { MAX_WIDTH_COUNT, normalizeRequestedWidths } from "./responsive";
 
 export interface ImageForgeConfig {
   output?: string;
@@ -119,7 +120,14 @@ function parseWidths(value: unknown, sourcePath: string): number[] | undefined {
     }
     parsed.push(entry);
   }
-  return parsed;
+
+  const normalized = normalizeRequestedWidths(parsed);
+  if (normalized.length > MAX_WIDTH_COUNT) {
+    throw new ConfigError(
+      `Invalid "widths" in ${sourcePath}: received ${normalized.length.toString()} unique widths, maximum is ${MAX_WIDTH_COUNT.toString()}.`
+    );
+  }
+  return normalized;
 }
 
 function parseConfig(value: unknown, sourcePath: string): ImageForgeConfig {

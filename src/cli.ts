@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConfigError, loadConfig, type ImageForgeConfig } from "./config";
 import type { OutputFormat } from "./processor";
+import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive";
 import { getDefaultConcurrency, runImageforge } from "./runner";
 
 interface CliOptions {
@@ -98,13 +99,21 @@ function normalizeWidths(widths: number[]): number[] {
 
   const uniqueSorted = Array.from(new Set(widths)).sort((left, right) => left - right);
   for (const width of uniqueSorted) {
-    if (width < 1 || width > 16_384) {
+    if (width < MIN_WIDTH || width > MAX_WIDTH) {
       throw new Error(
-        `Invalid width in requested widths: "${width.toString()}". Must be between 1 and 16384.`
+        `Invalid width in requested widths: "${width.toString()}". Must be between ${MIN_WIDTH.toString()} and ${MAX_WIDTH.toString()}.`
       );
     }
   }
   return uniqueSorted;
+}
+
+function assertWidthCountLimit(widths: number[], sourceHint = "") {
+  if (widths.length > MAX_WIDTH_COUNT) {
+    throw new Error(
+      `Invalid widths${sourceHint}: received ${widths.length.toString()} unique widths. Maximum is ${MAX_WIDTH_COUNT.toString()}.`
+    );
+  }
 }
 
 function parseWidthsInput(value: string): number[] {
@@ -121,7 +130,9 @@ function parseWidthsInput(value: string): number[] {
     parsed.push(parseIntegerFromString("width", normalized));
   }
 
-  return normalizeWidths(parsed);
+  const normalized = normalizeWidths(parsed);
+  assertWidthCountLimit(normalized);
+  return normalized;
 }
 
 function normalizeFormats(
@@ -275,10 +286,12 @@ function resolveOptions(
     if (invalidWidth !== undefined) {
       const sourceHint = widthsFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
       throw new Error(
-        `Invalid width${sourceHint}: "${invalidWidth.toString()}". Must be between 1 and 16384 for requested width targets.`
+        `Invalid width${sourceHint}: "${invalidWidth.toString()}". Must be between ${MIN_WIDTH.toString()} and ${MAX_WIDTH.toString()} for requested width targets.`
       );
     }
     resolved.widths = normalizeWidths(resolved.widths);
+    const sourceHint = widthsFromConfig && configSourcePath ? ` in ${configSourcePath}` : "";
+    assertWidthCountLimit(resolved.widths, sourceHint);
   }
 
   const concurrencyFromConfig =

@@ -105,25 +105,25 @@ the source image dimensions (no upscaling).
 imageforge <directory> [options]
 ```
 
-| Option                                       | Description                                                                               |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `-o, --output <path>`                        | Manifest output path (default: `imageforge.json`)                                         |
-| `-f, --formats <formats>`                    | Output formats, comma-separated (default: `webp`)                                         |
-| `-q, --quality <number>`                     | Output quality `1..100` (default: `80`)                                                   |
-| `--blur` / `--no-blur`                       | Enable/disable blur placeholder generation                                                |
-| `--blur-size <number>`                       | Blur dimensions `1..256` (default: `4`)                                                   |
-| `--widths <list>`                            | Requested width targets as comma-separated integers (effective widths are source-bounded) |
-| `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                                         |
-| `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                                               |
-| `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                                      |
-| `--out-dir <path>`                           | Output directory for generated derivatives                                                |
-| `--concurrency <number>`                     | Parallel processing (`1..64`, default: `min(8, availableParallelism)`)                    |
-| `--json` / `--no-json`                       | Emit machine-readable JSON report to stdout                                               |
-| `--verbose` / `--no-verbose`                 | Show additional diagnostics                                                               |
-| `--quiet` / `--no-quiet`                     | Suppress per-file non-error logs                                                          |
-| `--config <path>`                            | Explicit JSON config path                                                                 |
-| `-V, --version`                              | Print version                                                                             |
-| `-h, --help`                                 | Print help                                                                                |
+| Option                                       | Description                                                            |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| `-o, --output <path>`                        | Manifest output path (default: `imageforge.json`)                      |
+| `-f, --formats <formats>`                    | Output formats, comma-separated (default: `webp`)                      |
+| `-q, --quality <number>`                     | Output quality `1..100` (default: `80`)                                |
+| `--blur` / `--no-blur`                       | Enable/disable blur placeholder generation                             |
+| `--blur-size <number>`                       | Blur dimensions `1..256` (default: `4`)                                |
+| `--widths <list>`                            | Requested width targets as comma-separated integers (source-bounded, max 16 unique) |
+| `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                      |
+| `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                            |
+| `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                   |
+| `--out-dir <path>`                           | Output directory for generated derivatives                             |
+| `--concurrency <number>`                     | Parallel processing (`1..64`, default: `min(8, availableParallelism)`) |
+| `--json` / `--no-json`                       | Emit machine-readable JSON report to stdout                            |
+| `--verbose` / `--no-verbose`                 | Show additional diagnostics                                            |
+| `--quiet` / `--no-quiet`                     | Suppress per-file non-error logs                                       |
+| `--config <path>`                            | Explicit JSON config path                                              |
+| `-V, --version`                              | Print version                                                          |
+| `-h, --help`                                 | Print help                                                             |
 
 ## Runtime Behavior
 
@@ -135,6 +135,13 @@ imageforge <directory> [options]
 - With `--check`, ImageForge prints an exact copy-pastable rerun command.
 - Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
 - Requested widths are targets; generated effective widths may be smaller for source-bounded runs.
+- Width lists are capped at 16 unique values to bound compute and output fan-out.
+
+### Responsive Guardrail
+
+ImageForge enforces a maximum of 16 unique requested widths per run/config. This guard keeps
+responsive generation predictable and reduces accidental or hostile CPU/IO amplification from
+oversized width lists.
 
 ## Configuration
 

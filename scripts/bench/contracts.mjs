@@ -81,6 +81,8 @@ export function validateRawRunRecord(value) {
     "processed",
     "cached",
     "failed",
+    "totalOriginalSize",
+    "totalProcessedSize",
     "errorsLength",
   ]) {
     if (!hasFiniteNumber(value[key])) {
@@ -119,6 +121,13 @@ function validateSummaryShape(entry, label, errors) {
       if (!hasFiniteNumber(cold[key])) {
         errors.push(`${label}.cold.${key} must be a finite number.`);
       }
+    }
+
+    if (cold.originalBytes !== undefined && !hasFiniteNumber(cold.originalBytes)) {
+      errors.push(`${label}.cold.originalBytes must be a finite number.`);
+    }
+    if (cold.processedBytes !== undefined && !hasFiniteNumber(cold.processedBytes)) {
+      errors.push(`${label}.cold.processedBytes must be a finite number.`);
     }
   }
 
@@ -191,6 +200,192 @@ export function validateSummary(value) {
           `profileScenarioSummaries.${profileId}.${scenarioName}`,
           errors
         );
+      }
+    }
+  }
+
+  return errors;
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+
+function validateSnapshotMetricEntry(entry, label, errors) {
+  if (!isRecord(entry)) {
+    errors.push(`${label} must be an object.`);
+    return;
+  }
+
+  for (const key of [
+    "runCount",
+    "imageCount",
+    "coldWallMs",
+    "warmMeanMs",
+    "warmP50Ms",
+    "warmP95Ms",
+    "warmStddevMs",
+    "speedup",
+    "coldImagesPerSec",
+    "warmImagesPerSec",
+    "coldPerImageMs",
+    "warmPerImageMs",
+    "coldOriginalBytes",
+    "coldProcessedBytes",
+  ]) {
+    if (!hasFiniteNumber(entry[key])) {
+      errors.push(`${label}.${key} must be a finite number.`);
+    }
+  }
+
+  if (typeof entry.validationPassed !== "boolean") {
+    errors.push(`${label}.validationPassed must be boolean.`);
+  }
+}
+
+export function validateSiteSnapshot(value) {
+  const errors = [];
+  if (!isRecord(value)) {
+    return ["site snapshot must be an object."];
+  }
+
+  if (value.schemaVersion !== "1.0") {
+    errors.push('schemaVersion must be "1.0".');
+  }
+  if (!isNonEmptyString(value.snapshotId)) {
+    errors.push("snapshotId must be a non-empty string.");
+  }
+  if (!isNonEmptyString(value.generatedAt)) {
+    errors.push("generatedAt must be a non-empty string.");
+  }
+  if (!isNonEmptyString(value.asOfDate)) {
+    errors.push("asOfDate must be a non-empty string.");
+  }
+  if (!isNonEmptyString(value.owner)) {
+    errors.push("owner must be a non-empty string.");
+  }
+
+  if (!isRecord(value.source)) {
+    errors.push("source must be an object.");
+  } else {
+    const stringKeys = [
+      "repository",
+      "workflowName",
+      "workflowPath",
+      "runUrl",
+      "eventName",
+      "refName",
+      "sha",
+      "tier",
+      "datasetVersion",
+      "runner",
+      "nodeVersion",
+    ];
+    for (const key of stringKeys) {
+      if (!isNonEmptyString(value.source[key])) {
+        errors.push(`source.${key} must be a non-empty string.`);
+      }
+    }
+    for (const key of ["runId", "runAttempt", "runCount"]) {
+      if (!hasFiniteNumber(value.source[key])) {
+        errors.push(`source.${key} must be a finite number.`);
+      }
+    }
+  }
+
+  if (!isRecord(value.thresholds)) {
+    errors.push("thresholds must be an object.");
+  } else {
+    for (const key of [
+      "warmThresholdPct",
+      "coldThresholdPct",
+      "p95ThresholdPct",
+      "smallBaselineMs",
+      "minAbsoluteDeltaMs",
+    ]) {
+      if (!hasFiniteNumber(value.thresholds[key])) {
+        errors.push(`thresholds.${key} must be a finite number.`);
+      }
+    }
+  }
+
+  if (!isRecord(value.summary)) {
+    errors.push("summary must be an object.");
+  } else {
+    for (const key of ["totalPairs", "alertCount"]) {
+      if (!hasFiniteNumber(value.summary[key])) {
+        errors.push(`summary.${key} must be a finite number.`);
+      }
+    }
+    for (const key of ["hasAlerts", "headValidationPassed", "baseValidationPassed"]) {
+      if (typeof value.summary[key] !== "boolean") {
+        errors.push(`summary.${key} must be boolean.`);
+      }
+    }
+  }
+
+  if (!isRecord(value.benchmark)) {
+    errors.push("benchmark must be an object.");
+  } else {
+    if (!Array.isArray(value.benchmark.profiles)) {
+      errors.push("benchmark.profiles must be an array.");
+    }
+    if (!Array.isArray(value.benchmark.scenarios)) {
+      errors.push("benchmark.scenarios must be an array.");
+    }
+
+    if (!isRecord(value.benchmark.headline)) {
+      errors.push("benchmark.headline must be an object.");
+    } else {
+      if (!isNonEmptyString(value.benchmark.headline.profileId)) {
+        errors.push("benchmark.headline.profileId must be a non-empty string.");
+      }
+      if (!isNonEmptyString(value.benchmark.headline.scenario)) {
+        errors.push("benchmark.headline.scenario must be a non-empty string.");
+      }
+    }
+  }
+
+  if (!isRecord(value.profileScenarioMetrics)) {
+    errors.push("profileScenarioMetrics must be an object.");
+  } else {
+    for (const [profileId, scenarios] of Object.entries(value.profileScenarioMetrics)) {
+      if (!isRecord(scenarios)) {
+        errors.push(`profileScenarioMetrics.${profileId} must be an object.`);
+        continue;
+      }
+      for (const [scenarioName, entry] of Object.entries(scenarios)) {
+        validateSnapshotMetricEntry(
+          entry,
+          `profileScenarioMetrics.${profileId}.${scenarioName}`,
+          errors
+        );
+      }
+    }
+  }
+
+  if (!Array.isArray(value.deltas)) {
+    errors.push("deltas must be an array.");
+  } else {
+    for (const [index, delta] of value.deltas.entries()) {
+      const label = `deltas[${index.toString()}]`;
+      if (!isRecord(delta)) {
+        errors.push(`${label} must be an object.`);
+        continue;
+      }
+      if (!isNonEmptyString(delta.profileId)) {
+        errors.push(`${label}.profileId must be a non-empty string.`);
+      }
+      if (!isNonEmptyString(delta.scenario)) {
+        errors.push(`${label}.scenario must be a non-empty string.`);
+      }
+      for (const key of ["warmP50Pct", "warmP95Pct", "coldPct"]) {
+        if (!hasFiniteNumber(delta[key])) {
+          errors.push(`${label}.${key} must be a finite number.`);
+        }
+      }
+      if (!Array.isArray(delta.alerts) || delta.alerts.some((entry) => !isNonEmptyString(entry))) {
+        errors.push(`${label}.alerts must be an array of non-empty strings.`);
       }
     }
   }

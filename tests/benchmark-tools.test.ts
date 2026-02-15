@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.join(__dirname, "..");
 const COMPARE = path.join(ROOT, "scripts", "bench", "compare-benchmark.mjs");
+const EXPORT_SNAPSHOT = path.join(ROOT, "scripts", "bench", "export-site-snapshot.mjs");
 
 interface Metrics {
   cold: number;
@@ -45,6 +46,8 @@ function makeSummary(metrics: Metrics) {
             errorsLength: 0,
             imagesPerSec: 1,
             perImageMs: metrics.cold / 30,
+            originalBytes: 1200000,
+            processedBytes: 900000,
           },
           warm: {
             count: 3,
@@ -73,6 +76,48 @@ function makeSummary(metrics: Metrics) {
         },
       },
     },
+  };
+}
+
+function makeCompare() {
+  return {
+    version: "1.0",
+    generatedAt: "2026-02-15T00:00:00.000Z",
+    advisory: true,
+    thresholds: {
+      warmThresholdPct: 10,
+      coldThresholdPct: 15,
+      p95ThresholdPct: 20,
+      smallBaselineMs: 100,
+      minAbsoluteDeltaMs: 15,
+    },
+    summary: {
+      totalPairs: 1,
+      alertCount: 0,
+      hasAlerts: false,
+    },
+    pairs: [
+      {
+        profileId: "P2",
+        scenario: "batch-all",
+        base: {
+          warmP50Ms: 200,
+          warmP95Ms: 230,
+          coldMs: 1000,
+        },
+        head: {
+          warmP50Ms: 190,
+          warmP95Ms: 220,
+          coldMs: 990,
+        },
+        deltas: {
+          warmP50: { deltaMs: -10, regressionPct: -5 },
+          warmP95: { deltaMs: -10, regressionPct: -4.35 },
+          cold: { deltaMs: -10, regressionPct: -1 },
+        },
+        alerts: [],
+      },
+    ],
   };
 }
 
@@ -187,5 +232,83 @@ describe("benchmark contract validators", () => {
       },
     });
     expect(invalidErrors.length).toBeGreaterThan(0);
+  });
+
+  it("exports a valid site benchmark snapshot", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-bench-test-"));
+    const headPath = path.join(tempDir, "head-summary.json");
+    const basePath = path.join(tempDir, "base-summary.json");
+    const comparePath = path.join(tempDir, "compare.json");
+    const outPath = path.join(tempDir, "site-snapshot.json");
+
+    writeJson(headPath, makeSummary({ cold: 990, warmP50: 190, warmP95: 220 }));
+    writeJson(basePath, makeSummary({ cold: 1000, warmP50: 200, warmP95: 230 }));
+    writeJson(comparePath, makeCompare());
+
+    const result = spawnSync(
+      "node",
+      [
+        EXPORT_SNAPSHOT,
+        "--head-summary",
+        headPath,
+        "--base-summary",
+        basePath,
+        "--compare",
+        comparePath,
+        "--out",
+        outPath,
+        "--repository",
+        "f-campana/imageforge",
+        "--workflow-name",
+        "Benchmark CI",
+        "--workflow-path",
+        ".github/workflows/benchmark-ci.yml",
+        "--run-id",
+        "12345",
+        "--run-attempt",
+        "1",
+        "--run-url",
+        "https://github.com/f-campana/imageforge/actions/runs/12345",
+        "--event-name",
+        "schedule",
+        "--ref-name",
+        "main",
+        "--sha",
+        "abcdef123456",
+        "--tier",
+        "tier200",
+        "--run-count",
+        "10",
+        "--dataset-version",
+        "1.0.0",
+        "--runner",
+        "ubuntu-24.04",
+        "--node-version",
+        "22",
+        "--headline-profile",
+        "P2",
+        "--headline-scenario",
+        "batch-all",
+      ],
+      { encoding: "utf-8" }
+    );
+
+    expect(result.status).toBe(0);
+
+    const snapshot = JSON.parse(fs.readFileSync(outPath, "utf-8")) as {
+      schemaVersion: string;
+      snapshotId: string;
+      summary: { alertCount: number };
+    };
+
+    const contractsPath = path.join(ROOT, "scripts", "bench", "contracts.mjs");
+    const contracts = (await import(pathToFileURL(contractsPath).href)) as {
+      validateSiteSnapshot: (value: unknown) => string[];
+    };
+
+    expect(contracts.validateSiteSnapshot(snapshot)).toHaveLength(0);
+    expect(snapshot.schemaVersion).toBe("1.0");
+    expect(snapshot.snapshotId).toBe("12345.1");
+    expect(snapshot.summary.alertCount).toBe(0);
   });
 });

@@ -45,6 +45,8 @@
     "bench:run": "node scripts/bench/run-benchmark.mjs",
     "bench:compare": "node scripts/bench/compare-benchmark.mjs",
     "bench:report": "node scripts/bench/format-report.mjs",
+    "bench:export-site-snapshot": "node scripts/bench/export-site-snapshot.mjs",
+    "bench:sync-site": "node scripts/bench/sync-site-benchmark.mjs",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "pretest": "tsc",
     "test": "vitest run --exclude tests/packaged-install.e2e.test.ts",

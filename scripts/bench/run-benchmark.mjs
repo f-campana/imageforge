@@ -148,6 +148,8 @@ function summarizeProfileScenario(records, expectedTotal) {
       errorsLength: cold?.errorsLength ?? 0,
       imagesPerSec: round(coldWall > 0 ? (expectedTotal * 1000) / coldWall : 0),
       perImageMs: round(expectedTotal > 0 ? coldWall / expectedTotal : 0),
+      originalBytes: cold?.totalOriginalSize ?? 0,
+      processedBytes: cold?.totalProcessedSize ?? 0,
     },
     warm: {
       count: warm.length,
@@ -248,6 +250,10 @@ function runOneIteration({ cliPath, inputDir, outDir, manifestPath, profile }) {
     processed: typeof summary.processed === "number" ? summary.processed : 0,
     cached: typeof summary.cached === "number" ? summary.cached : 0,
     failed: typeof summary.failed === "number" ? summary.failed : 0,
+    totalOriginalSize:
+      typeof summary.totalOriginalSize === "number" ? summary.totalOriginalSize : 0,
+    totalProcessedSize:
+      typeof summary.totalProcessedSize === "number" ? summary.totalProcessedSize : 0,
     errorsLength: errors.length,
     stderr: (result.stderr ?? "").trim(),
     jsonParseError: parseError,
@@ -339,6 +345,8 @@ async function main() {
           processed: result.processed,
           cached: result.cached,
           failed: result.failed,
+          totalOriginalSize: result.totalOriginalSize,
+          totalProcessedSize: result.totalProcessedSize,
           errorsLength: result.errorsLength,
           stderr: result.stderr,
           jsonParseError: result.jsonParseError,

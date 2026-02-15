@@ -16,6 +16,10 @@ on:
         description: "Total runs per scenario (cold + warm)"
         required: false
         default: "10"
+      publish_site_snapshot:
+        description: "Publish benchmark snapshot to imageforge-site (true|false)"
+        required: false
+        default: "false"
   schedule:
     - cron: "20 2 * * *"
 
@@ -27,6 +31,10 @@ jobs:
     name: Benchmark (ubuntu-24.04, Node 22)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    outputs:
+      tier: ${{ steps.mode.outputs.tier }}
+      run_count: ${{ steps.mode.outputs.run_count }}
+      dataset_version: ${{ steps.mode.outputs.dataset_version }}
     steps:
       - name: Checkout head
         uses: actions/checkout@v6
@@ -230,3 +238,69 @@ jobs:
             ${{ runner.temp }}/bench-compare/compare.md
             ${{ runner.temp }}/bench-compare/report.md
           if-no-files-found: warn
+
+  publish-site-snapshot:
+    name: Publish site benchmark snapshot (approval-gated)
+    runs-on: ubuntu-24.04
+    needs: benchmark
+    if: >-
+      needs.benchmark.result == 'success' &&
+      (
+        (github.event_name == 'schedule' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && inputs.publish_site_snapshot == 'true')
+      )
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download benchmark artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: benchmark-artifacts
+          path: ${{ runner.temp }}/bench-artifacts
+
+      - name: Export site benchmark snapshot
+        run: |
+          mkdir -p "$RUNNER_TEMP/bench-site"
+          node scripts/bench/export-site-snapshot.mjs \
+            --head-summary "$RUNNER_TEMP/bench-artifacts/bench-head/results/summary.json" \
+            --base-summary "$RUNNER_TEMP/bench-artifacts/bench-base/results/summary.json" \
+            --compare "$RUNNER_TEMP/bench-artifacts/bench-compare/compare.json" \
+            --out "$RUNNER_TEMP/bench-site/site-benchmark-snapshot.json" \
+            --repository "${{ github.repository }}" \
+            --workflow-name "Benchmark CI" \
+            --workflow-path ".github/workflows/benchmark-ci.yml" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --event-name "${{ github.event_name }}" \
+            --ref-name "${{ github.ref_name }}" \
+            --sha "${{ github.sha }}" \
+            --tier "${{ needs.benchmark.outputs.tier }}" \
+            --run-count "${{ needs.benchmark.outputs.run_count }}" \
+            --dataset-version "${{ needs.benchmark.outputs.dataset_version }}" \
+            --runner "ubuntu-24.04" \
+            --node-version "22" \
+            --headline-profile "P2" \
+            --headline-scenario "batch-all" \
+            --owner "ImageForge Maintainers (CLI + Growth)"
+
+      - name: Sync snapshot into imageforge-site via PR
+        env:
+          IMAGEFORGE_SITE_SYNC_TOKEN: ${{ secrets.IMAGEFORGE_SITE_SYNC_TOKEN }}
+        run: |
+          node scripts/bench/sync-site-benchmark.mjs \
+            --snapshot "$RUNNER_TEMP/bench-site/site-benchmark-snapshot.json" \
+            --site-repo "f-campana/imageforge-site" \
+            --site-default-branch "main" \
+            --site-branch "codex/benchmark-sync-nightly" \
+            --retention "20" \
+            --token-env "IMAGEFORGE_SITE_SYNC_TOKEN" \
+            --pr-title "chore(benchmark): sync nightly benchmark snapshot"
+
+      - name: Upload site snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-benchmark-snapshot
+          path: ${{ runner.temp }}/bench-site/site-benchmark-snapshot.json
+          if-no-files-found: error

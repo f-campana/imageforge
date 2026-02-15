@@ -1,0 +1,97 @@
+name: Benchmark Dataset Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_version:
+        description: "Dataset semantic version (X.Y.Z)"
+        required: true
+      source_ref:
+        description: "Git ref to build dataset from"
+        required: false
+        default: "main"
+      tiers:
+        description: "Tier sizes (comma-separated)"
+        required: false
+        default: "30,200,500"
+      synthetic_count:
+        description: "Synthetic image count to generate"
+        required: false
+        default: "900"
+
+permissions:
+  contents: write
+
+jobs:
+  release-dataset:
+    name: Build and publish benchmark dataset
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch open-license source pool
+        run: |
+          node scripts/bench/fetch-sources.mjs \
+            --out-dir "$RUNNER_TEMP/bench-sources"
+
+      - name: Generate synthetic source pool
+        run: |
+          node scripts/bench/generate-synthetic.mjs \
+            --out-dir "$RUNNER_TEMP/bench-synthetic" \
+            --count "${{ inputs.synthetic_count }}" \
+            --seed 20260215 \
+            --concurrency 8
+
+      - name: Build benchmark tiers
+        run: |
+          node scripts/bench/build-tiers.mjs \
+            --dataset-version "${{ inputs.dataset_version }}" \
+            --sources-dir "$RUNNER_TEMP/bench-sources" \
+            --synthetic-dir "$RUNNER_TEMP/bench-synthetic" \
+            --out-dir "$RUNNER_TEMP/bench-release-assets" \
+            --build-dir "$RUNNER_TEMP/bench-build" \
+            --tiers "${{ inputs.tiers }}" \
+            --seed 20260215
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="bench-dataset-v${{ inputs.dataset_version }}"
+          title="Benchmark Dataset v${{ inputs.dataset_version }}"
+          notes="Benchmark dataset release for ImageForge CI benchmarks."
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$RUNNER_TEMP/bench-release-assets"/* --clobber
+          else
+            gh release create "$tag" "$RUNNER_TEMP/bench-release-assets"/* --title "$title" --notes "$notes"
+          fi
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-dataset-release-assets
+          path: |
+            ${{ runner.temp }}/bench-release-assets/*
+            ${{ runner.temp }}/bench-sources/fetch-report.json
+            ${{ runner.temp }}/bench-synthetic/synthetic-manifest.json
+          if-no-files-found: warn

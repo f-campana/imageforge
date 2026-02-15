@@ -289,6 +289,24 @@ Use check mode in CI to fail when assets are out of date:
 imageforge ./public/images --check
 ```
 
+## Benchmarking
+
+CI-native benchmark tooling and contracts live in `docs/benchmark/`.
+
+- Standard and thresholds: `docs/benchmark/STANDARD.md`
+- Data contracts: `docs/benchmark/INTERFACES.md`
+- Operational runbook: `docs/benchmark/RUNBOOK.md`
+- Dataset policy: `docs/benchmark/DATASET_POLICY.md`
+
+Core commands:
+
+```bash
+pnpm run bench:dataset:download -- --dataset-version 1.0.0 --tier tier30 --out-dir /tmp/imageforge-bench-dataset
+pnpm run bench:run -- --cli-path ./dist/cli.js --tier-manifest /tmp/imageforge-bench-dataset/extracted/tier30/tier-manifest.json --workspace /tmp/imageforge-bench-run --run-count 4 --profiles P1,P2,P3
+pnpm run bench:compare -- --base-summary /tmp/base-summary.json --head-summary /tmp/head-summary.json --out-json /tmp/compare.json --out-md /tmp/compare.md
+pnpm run bench:report -- --head-summary /tmp/head-summary.json --base-summary /tmp/base-summary.json --compare /tmp/compare.json --out /tmp/report.md
+```
+
 ## Development
 
 ```bash

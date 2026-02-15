@@ -68,5 +68,19 @@ export default tseslint.config(
       ...vitest.configs.recommended.rules,
     },
   },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        fetch: "readonly",
+        URL: "readonly",
+        Buffer: "readonly",
+        WritableStream: "readonly",
+      },
+    },
+  },
   prettier
 );

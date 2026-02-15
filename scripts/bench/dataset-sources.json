@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-02-15T00:00:00.000Z",
+  "policy": "open-license-plus-synthetic",
+  "sources": [
+    {
+      "id": "wikimedia-fall-foliage",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg",
+      "license": "CC BY-SA 3.0",
+      "attribution": "Marek B. / Wikimedia Commons",
+      "filename": "wikimedia-fronalpstock.jpg",
+      "sha256": "",
+      "enabled": true
+    },
+    {
+      "id": "wikimedia-astronaut",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg",
+      "license": "Public Domain",
+      "attribution": "NASA / Wikimedia Commons",
+      "filename": "wikimedia-apollo17-earth.jpg",
+      "sha256": "",
+      "enabled": true
+    },
+    {
+      "id": "wikimedia-mountain",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Trango_Towers_Karakoram.jpg",
+      "license": "CC BY-SA 3.0",
+      "attribution": "Wikimedia Commons contributor",
+      "filename": "wikimedia-trango-towers.jpg",
+      "sha256": "",
+      "enabled": true
+    }
+  ]
+}

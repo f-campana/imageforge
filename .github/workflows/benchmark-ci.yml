@@ -1,0 +1,230 @@
+name: Benchmark CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dataset_version:
+        description: "Dataset version (bench-dataset-vX.Y.Z)"
+        required: false
+        default: "1.0.0"
+      tier:
+        description: "Tier to run (tier30|tier200|tier500)"
+        required: false
+        default: "tier500"
+      run_count:
+        description: "Total runs per scenario (cold + warm)"
+        required: false
+        default: "10"
+  schedule:
+    - cron: "20 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Benchmark (ubuntu-24.04, Node 22)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@v6
+        with:
+          path: head
+
+      - name: Checkout main baseline
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          path: base
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: |
+            head/pnpm-lock.yaml
+            base/pnpm-lock.yaml
+
+      - name: Resolve benchmark mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "tier=tier30" >> "$GITHUB_OUTPUT"
+            echo "run_count=4" >> "$GITHUB_OUTPUT"
+            echo "dataset_version=1.0.0" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "tier=tier200" >> "$GITHUB_OUTPUT"
+            echo "run_count=10" >> "$GITHUB_OUTPUT"
+            echo "dataset_version=1.0.0" >> "$GITHUB_OUTPUT"
+          else
+            echo "tier=${{ inputs.tier }}" >> "$GITHUB_OUTPUT"
+            echo "run_count=${{ inputs.run_count }}" >> "$GITHUB_OUTPUT"
+            echo "dataset_version=${{ inputs.dataset_version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies (head)
+        run: pnpm install --frozen-lockfile
+        working-directory: head
+
+      - name: Install dependencies (base)
+        run: pnpm install --frozen-lockfile
+        working-directory: base
+
+      - name: Build head
+        run: pnpm run build
+        working-directory: head
+
+      - name: Build base
+        run: pnpm run build
+        working-directory: base
+
+      - name: Download dataset release assets
+        id: dataset
+        run: |
+          set +e
+          output=$(node head/scripts/bench/download-dataset.mjs \
+            --dataset-version "${{ steps.mode.outputs.dataset_version }}" \
+            --tier "${{ steps.mode.outputs.tier }}" \
+            --out-dir "$RUNNER_TEMP/bench-dataset" \
+            --allow-missing 2>&1)
+          status=$?
+          set -e
+
+          echo "$output"
+
+          if [ "$status" -eq 0 ]; then
+            manifest=$(echo "$output" | awk -F= '/^DATASET_TIER_MANIFEST=/{print $2}' | tail -n 1)
+            if [ -z "$manifest" ]; then
+              echo "Dataset download succeeded but manifest path was not found in output." >&2
+              exit 1
+            fi
+            echo "tier_manifest=$manifest" >> "$GITHUB_OUTPUT"
+            echo "dataset_source=release" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$status" -eq 2 ]; then
+            echo "tier_manifest=" >> "$GITHUB_OUTPUT"
+            echo "dataset_source=fallback" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Dataset download failed unexpectedly." >&2
+          exit "$status"
+
+      - name: Build fallback dataset locally
+        if: steps.dataset.outputs.dataset_source == 'fallback'
+        id: fallback
+        run: |
+          tier_size="${{ steps.mode.outputs.tier }}"
+          tier_size="${tier_size#tier}"
+
+          node head/scripts/bench/generate-synthetic.mjs \
+            --out-dir "$RUNNER_TEMP/bench-synthetic" \
+            --count 900 \
+            --seed 20260215 \
+            --concurrency 8
+
+          node head/scripts/bench/build-tiers.mjs \
+            --dataset-version "${{ steps.mode.outputs.dataset_version }}" \
+            --sources-dir "$RUNNER_TEMP/bench-sources" \
+            --synthetic-dir "$RUNNER_TEMP/bench-synthetic" \
+            --out-dir "$RUNNER_TEMP/bench-release-assets" \
+            --build-dir "$RUNNER_TEMP/bench-build" \
+            --tiers "$tier_size" \
+            --seed 20260215
+
+          manifest="$RUNNER_TEMP/bench-build/v${{ steps.mode.outputs.dataset_version }}/${{ steps.mode.outputs.tier }}/tier-manifest.json"
+          echo "tier_manifest=$manifest" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve tier manifest path
+        id: tier_manifest
+        run: |
+          if [ "${{ steps.dataset.outputs.dataset_source }}" = "release" ]; then
+            echo "path=${{ steps.dataset.outputs.tier_manifest }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=${{ steps.fallback.outputs.tier_manifest }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run head benchmark
+        run: |
+          node head/scripts/bench/run-benchmark.mjs \
+            --cli-path "$GITHUB_WORKSPACE/head/dist/cli.js" \
+            --tier-manifest "${{ steps.tier_manifest.outputs.path }}" \
+            --workspace "$RUNNER_TEMP/bench-head" \
+            --run-count "${{ steps.mode.outputs.run_count }}" \
+            --profiles P1,P2,P3
+
+      - name: Run base benchmark
+        run: |
+          node head/scripts/bench/run-benchmark.mjs \
+            --cli-path "$GITHUB_WORKSPACE/base/dist/cli.js" \
+            --tier-manifest "${{ steps.tier_manifest.outputs.path }}" \
+            --workspace "$RUNNER_TEMP/bench-base" \
+            --run-count "${{ steps.mode.outputs.run_count }}" \
+            --profiles P1,P2,P3
+
+      - name: Compare head vs base (advisory)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bench-compare"
+          node head/scripts/bench/compare-benchmark.mjs \
+            --base-summary "$RUNNER_TEMP/bench-base/results/summary.json" \
+            --head-summary "$RUNNER_TEMP/bench-head/results/summary.json" \
+            --out-json "$RUNNER_TEMP/bench-compare/compare.json" \
+            --out-md "$RUNNER_TEMP/bench-compare/compare.md" \
+            --warm-threshold-pct 10 \
+            --cold-threshold-pct 15 \
+            --p95-threshold-pct 20 \
+            --small-baseline-ms 100 \
+            --min-absolute-delta-ms 15
+
+      - name: Format benchmark report
+        run: |
+          node head/scripts/bench/format-report.mjs \
+            --head-summary "$RUNNER_TEMP/bench-head/results/summary.json" \
+            --base-summary "$RUNNER_TEMP/bench-base/results/summary.json" \
+            --compare "$RUNNER_TEMP/bench-compare/compare.json" \
+            --out "$RUNNER_TEMP/bench-compare/report.md"
+
+      - name: Add advisory warnings
+        run: |
+          ALERTS=$(node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(String(c.summary.alertCount));" "$RUNNER_TEMP/bench-compare/compare.json")
+          if [ "$ALERTS" -gt 0 ]; then
+            echo "::warning::Benchmark advisory detected $ALERTS regression alert(s). See benchmark artifacts for details."
+          fi
+
+      - name: Publish step summary
+        run: |
+          {
+            echo "## Benchmark Run"
+            echo
+            echo "- Dataset source: ${{ steps.dataset.outputs.dataset_source }}"
+            echo "- Dataset version: ${{ steps.mode.outputs.dataset_version }}"
+            echo "- Tier: ${{ steps.mode.outputs.tier }}"
+            echo "- Run count: ${{ steps.mode.outputs.run_count }}"
+            echo
+            cat "$RUNNER_TEMP/bench-compare/report.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-artifacts
+          path: |
+            ${{ runner.temp }}/bench-head/results/raw-runs.jsonl
+            ${{ runner.temp }}/bench-head/results/summary.json
+            ${{ runner.temp }}/bench-base/results/raw-runs.jsonl
+            ${{ runner.temp }}/bench-base/results/summary.json
+            ${{ runner.temp }}/bench-compare/compare.json
+            ${{ runner.temp }}/bench-compare/compare.md
+            ${{ runner.temp }}/bench-compare/report.md
+          if-no-files-found: warn

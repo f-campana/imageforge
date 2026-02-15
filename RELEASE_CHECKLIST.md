@@ -26,6 +26,23 @@ Pass criteria:
 - Build succeeds.
 - `pnpm pack --dry-run` shows expected tarball contents.
 
+## Benchmark Evidence Gate (Required for Public Performance/Speed Claims)
+
+Before publishing benchmark-driven claims (README, website, release notes), verify latest CI benchmark evidence:
+
+```bash
+# Optional local dry-run benchmark on tier30
+pnpm run bench:dataset:synthetic -- --count 600
+pnpm run bench:dataset:build -- --dataset-version 0.0.0-dev --tiers 30
+pnpm run bench:run -- --cli-path ./dist/cli.js --tier-manifest ./.tmp/bench/build/v0.0.0-dev/tier30/tier-manifest.json --workspace /tmp/imageforge-bench-local --run-count 4 --profiles P1,P2,P3
+```
+
+Required release-review checks:
+
+- Latest nightly benchmark workflow succeeded.
+- Benchmark artifacts include `raw-runs.jsonl`, `summary.json`, and comparison report.
+- Any benchmark numbers used in public copy include as-of date, runner, dataset version, and profile.
+
 ## 3. Create a Manual Test Workspace
 
 Create deterministic local fixtures in a temp directory:
@@ -295,6 +312,7 @@ Run section 2 and key items from sections 4-6 on:
 - GitHub Actions OIDC/provenance publish path is intact (`id-token: write` on publish job).
 - Workflows are green on `main`:
   - `.github/workflows/ci.yml`
+  - `.github/workflows/benchmark-ci.yml`
   - `.github/workflows/release-please.yml`
   - `.github/workflows/publish.yml`
 - Commit history uses Conventional Commits for Release Please.

@@ -127,6 +127,8 @@ jobs:
           tier_size="${{ steps.mode.outputs.tier }}"
           tier_size="${tier_size#tier}"
 
+          mkdir -p "$RUNNER_TEMP/bench-sources"
+
           node head/scripts/bench/generate-synthetic.mjs \
             --out-dir "$RUNNER_TEMP/bench-synthetic" \
             --count 900 \

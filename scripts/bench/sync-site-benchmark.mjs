@@ -232,7 +232,13 @@ async function main() {
     { cwd: cloneDir }
   );
 
+  let pushLeaseArg = "--force-with-lease";
   if ((existingBranch.status ?? 1) === 0) {
+    const remoteBranchSha = existingBranch.stdout.trim().split(/\s+/)[0];
+    if (!remoteBranchSha) {
+      throw new Error(`Unable to determine remote SHA for branch '${siteBranch}'.`);
+    }
+
     runChecked(
       "git",
       ["fetch", "--depth", "1", "origin", `${siteBranch}:refs/remotes/origin/${siteBranch}`],
@@ -243,6 +249,8 @@ async function main() {
     runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteBranch}`], {
       cwd: cloneDir,
     });
+
+    pushLeaseArg = `--force-with-lease=refs/heads/${siteBranch}:${remoteBranchSha}`;
   } else {
     runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteDefaultBranch}`], {
       cwd: cloneDir,
@@ -282,7 +290,7 @@ async function main() {
   const commitMessage = `chore(benchmark): sync snapshot ${snapshot.snapshotId}`;
   runChecked("git", ["commit", "-m", commitMessage], { cwd: cloneDir });
 
-  runChecked("git", ["push", "--force-with-lease", "origin", siteBranch], {
+  runChecked("git", ["push", pushLeaseArg, "origin", siteBranch], {
     cwd: cloneDir,
   });
 

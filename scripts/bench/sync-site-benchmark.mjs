@@ -40,6 +40,19 @@ function runChecked(command, args, options = {}) {
   return result;
 }
 
+function runAllowFailure(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    encoding: "utf-8",
+    ...options,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result;
+}
+
 function parseRepoSlug(value) {
   const parts = value.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
@@ -213,9 +226,28 @@ async function main() {
 
   runChecked("git", ["clone", "--depth", "1", "--branch", siteDefaultBranch, remoteUrl, cloneDir]);
 
-  runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteDefaultBranch}`], {
-    cwd: cloneDir,
-  });
+  const existingBranch = runAllowFailure(
+    "git",
+    ["ls-remote", "--exit-code", "--heads", "origin", siteBranch],
+    { cwd: cloneDir }
+  );
+
+  if ((existingBranch.status ?? 1) === 0) {
+    runChecked(
+      "git",
+      ["fetch", "--depth", "1", "origin", `${siteBranch}:refs/remotes/origin/${siteBranch}`],
+      {
+        cwd: cloneDir,
+      }
+    );
+    runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteBranch}`], {
+      cwd: cloneDir,
+    });
+  } else {
+    runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteDefaultBranch}`], {
+      cwd: cloneDir,
+    });
+  }
 
   const localSnapshotPath = path.join(cloneDir, ".tmp", "site-benchmark-snapshot.json");
   writeJson(localSnapshotPath, snapshot);

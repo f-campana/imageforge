@@ -12,6 +12,14 @@ Phase 1 uses open-license plus synthetic data.
 
 - Open-license media is tracked in `scripts/bench/dataset-sources.json`.
 - Synthetic fixtures are generated deterministically by `scripts/bench/generate-synthetic.mjs`.
+- Enabled open-license entries must include pinned `sha256` values.
+- `scripts/bench/fetch-sources.mjs` is fail-closed by default for:
+  - missing/invalid source hashes
+  - source download failures
+  - checksum mismatches
+- Waiver flags are explicit and non-default:
+  - `--allow-unpinned-sources`
+  - `--allow-partial`
 
 ## Versioning
 
@@ -22,6 +30,8 @@ Phase 1 uses open-license plus synthetic data.
 
 - Keep all released dataset versions.
 - Never overwrite existing dataset tag assets in-place.
+- Dataset release workflow enforces immutability with `scripts/bench/assert-dataset-tag-absent.mjs`.
+- Existing tags are treated as immutable and must be replaced by a new semantic version.
 
 ## Integrity
 

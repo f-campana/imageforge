@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updatedAt": "2026-02-15T00:00:00.000Z",
+  "updatedAt": "2026-02-19T00:00:00.000Z",
   "policy": "open-license-plus-synthetic",
   "sources": [
     {
@@ -9,7 +9,7 @@
       "license": "CC BY-SA 3.0",
       "attribution": "Marek B. / Wikimedia Commons",
       "filename": "wikimedia-fronalpstock.jpg",
-      "sha256": "",
+      "sha256": "24eb29eccdf0af691b406d1a3d22c0ef5d761cc454d8a917848c33958f6fc857",
       "enabled": true
     },
     {
@@ -18,7 +18,7 @@
       "license": "Public Domain",
       "attribution": "NASA / Wikimedia Commons",
       "filename": "wikimedia-apollo17-earth.jpg",
-      "sha256": "",
+      "sha256": "51049ed4e34514880bfbe39d34e2dd2c56e31f55919e7f4f0b34ef1698cb9f50",
       "enabled": true
     },
     {
@@ -28,7 +28,7 @@
       "attribution": "Wikimedia Commons contributor",
       "filename": "wikimedia-trango-towers.jpg",
       "sha256": "",
-      "enabled": true
+      "enabled": false
     }
   ]
 }

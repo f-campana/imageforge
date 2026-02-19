@@ -40,6 +40,7 @@
     "dev": "tsc --watch",
     "bench:dataset:fetch": "node scripts/bench/fetch-sources.mjs",
     "bench:dataset:synthetic": "node scripts/bench/generate-synthetic.mjs",
+    "bench:dataset:assert-tag": "node scripts/bench/assert-dataset-tag-absent.mjs",
     "bench:dataset:build": "node scripts/bench/build-tiers.mjs",
     "bench:dataset:download": "node scripts/bench/download-dataset.mjs",
     "bench:run": "node scripts/bench/run-benchmark.mjs",

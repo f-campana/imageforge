@@ -47,6 +47,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Assert dataset tag is absent (immutable releases)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/bench/assert-dataset-tag-absent.mjs \
+            --repo "${{ github.repository }}" \
+            --dataset-version "${{ inputs.dataset_version }}"
+
       - name: Fetch open-license source pool
         run: |
           node scripts/bench/fetch-sources.mjs \
@@ -78,12 +86,7 @@ jobs:
           tag="bench-dataset-v${{ inputs.dataset_version }}"
           title="Benchmark Dataset v${{ inputs.dataset_version }}"
           notes="Benchmark dataset release for ImageForge CI benchmarks."
-
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$RUNNER_TEMP/bench-release-assets"/* --clobber
-          else
-            gh release create "$tag" "$RUNNER_TEMP/bench-release-assets"/* --title "$title" --notes "$notes"
-          fi
+          gh release create "$tag" "$RUNNER_TEMP/bench-release-assets"/* --title "$title" --notes "$notes"
 
       - name: Upload build artifacts
         if: always()

@@ -8,6 +8,8 @@ import { spawnSync } from "node:child_process";
 import { parseArgs, readJson, resolvePath, writeJson } from "./common.mjs";
 import { assertValid, validateSiteSnapshot } from "./contracts.mjs";
 
+let activeRedact = (value) => String(value ?? "");
+
 function usage() {
   console.log(`Usage: node scripts/bench/sync-site-benchmark.mjs \\
   --snapshot <path> \\
@@ -20,37 +22,90 @@ function usage() {
   [--pr-title <title>]`);
 }
 
-function runChecked(command, args, options = {}) {
+function createRedactor(secretValues) {
+  const secrets = secretValues
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .flatMap((value) => [value, encodeURIComponent(value)]);
+
+  return (value) => {
+    let text = String(value ?? "");
+    for (const secret of secrets) {
+      text = text.split(secret).join("[REDACTED]");
+    }
+    return text;
+  };
+}
+
+function formatCommand(command, args, redact) {
+  return [command, ...args].map((part) => redact(part)).join(" ");
+}
+
+function runChecked(command, args, options = {}, redact = activeRedact) {
   const result = spawnSync(command, args, {
     encoding: "utf-8",
     ...options,
   });
 
   if (result.error) {
-    throw result.error;
+    throw new Error(redact(result.error.message));
   }
 
   if ((result.status ?? 1) !== 0) {
+    const stderr = redact(result.stderr ?? "").trim();
+    const stdout = redact(result.stdout ?? "").trim();
+    const details = [stderr, stdout].filter(Boolean).join("\n");
     throw new Error(
-      `${command} ${args.join(" ")} failed with exit code ${(result.status ?? 1).toString()}\n` +
-        `${result.stderr ?? ""}`
+      `${formatCommand(command, args, redact)} failed with exit code ${(result.status ?? 1).toString()}${details ? `\n${details}` : ""}`
     );
   }
 
   return result;
 }
 
-function runAllowFailure(command, args, options = {}) {
+function runAllowFailure(command, args, options = {}, redact = activeRedact) {
   const result = spawnSync(command, args, {
     encoding: "utf-8",
     ...options,
   });
 
   if (result.error) {
-    throw result.error;
+    throw new Error(redact(result.error.message));
   }
 
   return result;
+}
+
+function createGitCredentialEnv(token) {
+  const authDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-git-auth-"));
+  const askpassPath = path.join(authDir, "askpass.sh");
+  const askpassScript = `#!/bin/sh
+case "$1" in
+  *Username*|*username*)
+    printf "%s\\n" "\${GIT_ASKPASS_USERNAME:-x-access-token}"
+    ;;
+  *Password*|*password*)
+    printf "%s\\n" "\${GIT_ASKPASS_PASSWORD}"
+    ;;
+  *)
+    printf "\\n"
+    ;;
+esac
+`;
+  fs.writeFileSync(askpassPath, askpassScript, { encoding: "utf-8", mode: 0o700 });
+  fs.chmodSync(askpassPath, 0o700);
+
+  return {
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_ASKPASS: askpassPath,
+      GIT_ASKPASS_USERNAME: "x-access-token",
+      GIT_ASKPASS_PASSWORD: token,
+    },
+    cleanup: () => {
+      fs.rmSync(authDir, { recursive: true, force: true });
+    },
+  };
 }
 
 function parseRepoSlug(value) {
@@ -186,6 +241,8 @@ async function main() {
   if (!token) {
     throw new Error(`Missing required token env '${tokenEnv}'.`);
   }
+  const redact = createRedactor([token]);
+  activeRedact = redact;
 
   const siteRepo =
     typeof args["site-repo"] === "string" && args["site-repo"].trim().length > 0
@@ -222,90 +279,129 @@ async function main() {
   const cloneDir = path.join(workspace, "imageforge-site");
   fs.rmSync(cloneDir, { recursive: true, force: true });
 
-  const remoteUrl = `https://x-access-token:${encodeURIComponent(token)}@github.com/${siteRepo}.git`;
+  const remoteUrl = `https://github.com/${siteRepo}.git`;
+  const gitCredential = createGitCredentialEnv(token);
 
-  runChecked("git", ["clone", "--depth", "1", "--branch", siteDefaultBranch, remoteUrl, cloneDir]);
+  try {
+    runChecked(
+      "git",
+      ["clone", "--depth", "1", "--branch", siteDefaultBranch, remoteUrl, cloneDir],
+      { env: gitCredential.env },
+      redact
+    );
 
-  const existingBranch = runAllowFailure(
-    "git",
-    ["ls-remote", "--exit-code", "--heads", "origin", siteBranch],
-    { cwd: cloneDir }
-  );
+    const existingBranch = runAllowFailure(
+      "git",
+      ["ls-remote", "--exit-code", "--heads", "origin", siteBranch],
+      { cwd: cloneDir, env: gitCredential.env },
+      redact
+    );
 
-  let pushLeaseArg = "--force-with-lease";
-  if ((existingBranch.status ?? 1) === 0) {
-    const remoteBranchSha = existingBranch.stdout.trim().split(/\s+/)[0];
-    if (!remoteBranchSha) {
-      throw new Error(`Unable to determine remote SHA for branch '${siteBranch}'.`);
+    let pushLeaseArg = "--force-with-lease";
+    if ((existingBranch.status ?? 1) === 0) {
+      const remoteBranchSha = existingBranch.stdout.trim().split(/\s+/)[0];
+      if (!remoteBranchSha) {
+        throw new Error(`Unable to determine remote SHA for branch '${siteBranch}'.`);
+      }
+
+      runChecked(
+        "git",
+        ["fetch", "--depth", "1", "origin", `${siteBranch}:refs/remotes/origin/${siteBranch}`],
+        {
+          cwd: cloneDir,
+          env: gitCredential.env,
+        },
+        redact
+      );
+      runChecked(
+        "git",
+        ["checkout", "-B", siteBranch, `origin/${siteBranch}`],
+        {
+          cwd: cloneDir,
+          env: gitCredential.env,
+        },
+        redact
+      );
+
+      pushLeaseArg = `--force-with-lease=refs/heads/${siteBranch}:${remoteBranchSha}`;
+    } else {
+      runChecked(
+        "git",
+        ["checkout", "-B", siteBranch, `origin/${siteDefaultBranch}`],
+        {
+          cwd: cloneDir,
+          env: gitCredential.env,
+        },
+        redact
+      );
+    }
+
+    const localSnapshotPath = path.join(cloneDir, ".tmp", "site-benchmark-snapshot.json");
+    writeJson(localSnapshotPath, snapshot);
+
+    runChecked(
+      "node",
+      [
+        "scripts/benchmark/upsert-snapshot.mjs",
+        "--snapshot",
+        localSnapshotPath,
+        "--retention",
+        retention.toString(),
+      ],
+      { cwd: cloneDir },
+      redact
+    );
+
+    const status = runChecked("git", ["status", "--porcelain"], { cwd: cloneDir }, redact);
+    if (status.stdout.trim().length === 0) {
+      console.log("No site changes detected; skipping commit and PR update.");
+      return;
     }
 
     runChecked(
       "git",
-      ["fetch", "--depth", "1", "origin", `${siteBranch}:refs/remotes/origin/${siteBranch}`],
+      ["config", "user.name", "imageforge-benchmark-bot"],
+      { cwd: cloneDir },
+      redact
+    );
+    runChecked(
+      "git",
+      ["config", "user.email", "imageforge-benchmark-bot@users.noreply.github.com"],
+      { cwd: cloneDir },
+      redact
+    );
+
+    runChecked("git", ["add", "-A"], { cwd: cloneDir }, redact);
+
+    const commitMessage = `chore(benchmark): sync snapshot ${snapshot.snapshotId}`;
+    runChecked("git", ["commit", "-m", commitMessage], { cwd: cloneDir }, redact);
+
+    runChecked(
+      "git",
+      ["push", pushLeaseArg, "origin", siteBranch],
       {
         cwd: cloneDir,
-      }
+        env: gitCredential.env,
+      },
+      redact
     );
-    runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteBranch}`], {
-      cwd: cloneDir,
+
+    const prBody = buildPrBody(snapshot, siteRepo, siteBranch, siteDefaultBranch);
+    await createOrUpdatePr({
+      token,
+      siteRepo,
+      siteDefaultBranch,
+      siteBranch,
+      prTitle,
+      prBody,
     });
-
-    pushLeaseArg = `--force-with-lease=refs/heads/${siteBranch}:${remoteBranchSha}`;
-  } else {
-    runChecked("git", ["checkout", "-B", siteBranch, `origin/${siteDefaultBranch}`], {
-      cwd: cloneDir,
-    });
+  } finally {
+    gitCredential.cleanup();
   }
-
-  const localSnapshotPath = path.join(cloneDir, ".tmp", "site-benchmark-snapshot.json");
-  writeJson(localSnapshotPath, snapshot);
-
-  runChecked(
-    "node",
-    [
-      "scripts/benchmark/upsert-snapshot.mjs",
-      "--snapshot",
-      localSnapshotPath,
-      "--retention",
-      retention.toString(),
-    ],
-    { cwd: cloneDir }
-  );
-
-  const status = runChecked("git", ["status", "--porcelain"], { cwd: cloneDir });
-  if (status.stdout.trim().length === 0) {
-    console.log("No site changes detected; skipping commit and PR update.");
-    return;
-  }
-
-  runChecked("git", ["config", "user.name", "imageforge-benchmark-bot"], {
-    cwd: cloneDir,
-  });
-  runChecked("git", ["config", "user.email", "imageforge-benchmark-bot@users.noreply.github.com"], {
-    cwd: cloneDir,
-  });
-
-  runChecked("git", ["add", "-A"], { cwd: cloneDir });
-
-  const commitMessage = `chore(benchmark): sync snapshot ${snapshot.snapshotId}`;
-  runChecked("git", ["commit", "-m", commitMessage], { cwd: cloneDir });
-
-  runChecked("git", ["push", pushLeaseArg, "origin", siteBranch], {
-    cwd: cloneDir,
-  });
-
-  const prBody = buildPrBody(snapshot, siteRepo, siteBranch, siteDefaultBranch);
-  await createOrUpdatePr({
-    token,
-    siteRepo,
-    siteDefaultBranch,
-    siteBranch,
-    prTitle,
-    prBody,
-  });
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(activeRedact(message));
   process.exitCode = 1;
 });

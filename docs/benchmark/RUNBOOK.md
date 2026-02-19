@@ -3,8 +3,9 @@
 ## Local Dry Run
 
 ```bash
+pnpm run bench:dataset:fetch -- --out-dir ./.tmp/bench/sources
 pnpm run bench:dataset:synthetic -- --count 600
-pnpm run bench:dataset:build -- --dataset-version 0.0.0-dev
+pnpm run bench:dataset:build -- --dataset-version 0.0.0-dev --sources-dir ./.tmp/bench/sources
 pnpm run build
 
 node scripts/bench/run-benchmark.mjs \
@@ -13,6 +14,15 @@ node scripts/bench/run-benchmark.mjs \
   --workspace ./.tmp/bench/local-run \
   --run-count 3 \
   --profiles P2
+```
+
+`fetch-sources` defaults are strict and fail-closed. Use waiver flags only for controlled recovery:
+
+```bash
+pnpm run bench:dataset:fetch -- \
+  --out-dir ./.tmp/bench/sources \
+  --allow-unpinned-sources \
+  --allow-partial
 ```
 
 ## Head vs Main Comparison
@@ -72,15 +82,25 @@ Notes:
 
 ## Dataset Release
 
-1. Generate synthetic pool.
-2. Optionally fetch open-license sources.
-3. Build tier archives and manifest.
-4. Publish release tag `bench-dataset-vX.Y.Z` with assets:
+1. Assert dataset tag does not already exist:
+
+```bash
+pnpm run bench:dataset:assert-tag -- \
+  --repo f-campana/imageforge \
+  --dataset-version X.Y.Z
+```
+
+2. Generate synthetic pool.
+3. Fetch open-license sources (strict default).
+4. Build tier archives and manifest.
+5. Publish release tag `bench-dataset-vX.Y.Z` with assets:
    - `imageforge-bench-tier30-vX.Y.Z.tar.zst`
    - `imageforge-bench-tier200-vX.Y.Z.tar.zst`
    - `imageforge-bench-tier500-vX.Y.Z.tar.zst`
    - `benchmark-dataset-manifest-vX.Y.Z.json`
    - `sha256sums-vX.Y.Z.txt`
+
+Release tags are immutable. Existing tags must not be overwritten; publish a new semantic version instead.
 
 ## Monthly Governance Sync
 

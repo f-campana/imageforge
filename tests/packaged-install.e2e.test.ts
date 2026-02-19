@@ -3,8 +3,11 @@ import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const ROOT = path.join(__dirname, "..");
 const PACKAGE_VERSION = (
   JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8")) as { version: string }
@@ -89,6 +92,45 @@ describe("packaged install e2e", () => {
       npm_config_cache: npmCacheDir,
     });
     expect(install.status).toBe(0);
+
+    const requireMatrixScript = [
+      "const root = require('@imageforge/cli');",
+      "const processor = require('@imageforge/cli/processor');",
+      "const runner = require('@imageforge/cli/runner');",
+      "if (typeof root.processImage !== 'function') throw new Error('missing root processImage export');",
+      "if ('runImageforge' in root) throw new Error('runner should not be exported from root');",
+      "if (typeof processor.convertImage !== 'function') throw new Error('missing processor convertImage export');",
+      "if (typeof runner.runImageforge !== 'function') throw new Error('missing runner runImageforge export');",
+      "if (typeof runner.getDefaultConcurrency !== 'function') throw new Error('missing runner getDefaultConcurrency export');",
+      "console.log('ok');",
+    ].join(" ");
+    const requireMatrix = runCommand("node", ["-e", requireMatrixScript], consumerDir, {
+      npm_config_cache: npmCacheDir,
+    });
+    expect(requireMatrix.status).toBe(0);
+    expect(requireMatrix.stdout.trim()).toBe("ok");
+
+    const importMatrixScript = [
+      "import * as root from '@imageforge/cli';",
+      "import * as processor from '@imageforge/cli/processor';",
+      "import * as runner from '@imageforge/cli/runner';",
+      "if (typeof root.processImage !== 'function') throw new Error('missing root processImage export');",
+      "if ('runImageforge' in root) throw new Error('runner should not be exported from root');",
+      "if (typeof processor.convertImage !== 'function') throw new Error('missing processor convertImage export');",
+      "if (typeof runner.runImageforge !== 'function') throw new Error('missing runner runImageforge export');",
+      "if (typeof runner.getDefaultConcurrency !== 'function') throw new Error('missing runner getDefaultConcurrency export');",
+      "console.log('ok');",
+    ].join(" ");
+    const importMatrix = runCommand(
+      "node",
+      ["--input-type=module", "-e", importMatrixScript],
+      consumerDir,
+      {
+        npm_config_cache: npmCacheDir,
+      }
+    );
+    expect(importMatrix.status).toBe(0);
+    expect(importMatrix.stdout.trim()).toBe("ok");
 
     const version = runCommand("npx", ["imageforge", "--version"], consumerDir, {
       npm_config_cache: npmCacheDir,

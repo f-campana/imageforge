@@ -7,7 +7,7 @@ import {
   normalizeRequestedWidths,
   resolveEffectiveWidths,
   resolveOrientedDimensions,
-} from "./responsive";
+} from "./responsive.js";
 
 export type OutputFormat = "webp" | "avif";
 

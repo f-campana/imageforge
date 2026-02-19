@@ -4,10 +4,11 @@ import chalk from "chalk";
 import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
-import { ConfigError, loadConfig, type ImageForgeConfig } from "./config";
-import type { OutputFormat } from "./processor";
-import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive";
-import { getDefaultConcurrency, runImageforge } from "./runner";
+import { fileURLToPath } from "node:url";
+import { ConfigError, loadConfig, type ImageForgeConfig } from "./config.js";
+import type { OutputFormat } from "./processor.js";
+import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive.js";
+import { getDefaultConcurrency, runImageforge } from "./runner.js";
 
 interface CliOptions {
   output?: string;
@@ -49,7 +50,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readPackageVersion(): string {
-  const packageJsonPath = path.join(__dirname, "../package.json");
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const packageJsonPath = path.join(moduleDir, "../package.json");
   try {
     const packageJsonContent = fs.readFileSync(packageJsonPath, "utf-8");
     const parsed: unknown = JSON.parse(packageJsonContent);

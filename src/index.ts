@@ -1,4 +1,4 @@
-export * from "./types";
+export * from "./types.js";
 export {
   convertImage,
   discoverImages,
@@ -12,4 +12,4 @@ export {
   type ImageResult,
   type OutputFormat,
   type ProcessOptions,
-} from "./processor";
+} from "./processor.js";

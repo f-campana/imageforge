@@ -2,7 +2,7 @@
   "reportDate": "2026-02-19",
   "baselineDate": "2026-02-15",
   "baselineSource": "Prior audit snapshot provided in thread (2026-02-15).",
-  "generatedAt": "2026-02-19T17:06:09Z",
+  "generatedAt": "2026-02-19T22:27:19.205Z",
   "scope": {
     "imageforge": {
       "path": "/Users/fabiencampana/Documents/ImageForge",
@@ -84,8 +84,8 @@
   "deltaCounts": {
     "New": 11,
     "Changed": 5,
-    "Unchanged": 11,
-    "Resolved": 6
+    "Unchanged": 9,
+    "Resolved": 8
   },
   "findings": [
     {
@@ -93,29 +93,44 @@
       "repo": "imageforge",
       "domain": "Module System",
       "severity": "Critical",
-      "deltaStatus": "Unchanged",
-      "finding": "CJS runtime and require-only exports remain coupled to ESM-first dependencies.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 2: package is now ESM-primary with explicit dual import/require export conditions and dual build outputs.",
       "evidence": [
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
+          "line": 15,
+          "note": "package now declares type module"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
+          "line": 22,
+          "note": "exports define both import and require conditions"
+        },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/tsconfig.json",
           "line": 4,
-          "note": "module CommonJS"
+          "note": "ESM-primary NodeNext compilation"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
-          "line": 21,
-          "note": "exports only define require"
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/imageforge.test.ts",
+          "line": 1785,
+          "note": "local consumer require/import export matrix coverage"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
-          "line": 77,
-          "note": "chalk and p-limit dependency versions"
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/packaged-install.e2e.test.ts",
+          "line": 96,
+          "note": "tarball consumer require/import matrix coverage"
         }
       ],
-      "impact": "Higher probability of consumer breakage with future dependency/module shifts.",
-      "recommendation": "Move to full ESM or dual-mode exports with explicit import/require conditions and tests.",
+      "impact": "Consumer module loading contract is now explicit and verified across ESM and CJS entry points.",
+      "recommendation": "Keep dual build/export matrix in CI and preserve import/require compatibility tests for future dependency upgrades.",
       "owner": "CLI Core",
-      "verification": ["pnpm test", "Consumer import/require matrix test"]
+      "verification": [
+        "pnpm run check",
+        "pnpm run test:e2e",
+        "node -e \"require('@imageforge/cli')\"",
+        "node --input-type=module -e \"import '@imageforge/cli'\""
+      ]
     },
     {
       "id": "IF-CLI-MAINT-002",
@@ -146,29 +161,44 @@
       "repo": "imageforge",
       "domain": "Public API / DX",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "Full pipeline runner is still not exported as a public API contract.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 2: stable runner API is now exported on @imageforge/cli/runner (subpath-only contract).",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/src/index.ts",
-          "line": 1,
-          "note": "root exports exclude runner"
-        },
-        {
           "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
-          "line": 21,
-          "note": "no runner subpath export"
+          "line": 33,
+          "note": "runner subpath export includes types/import/require"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
           "line": 684,
-          "note": "runImageforge exists internally"
+          "note": "runImageforge public function"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/imageforge.test.ts",
+          "line": 1785,
+          "note": "asserts runner is available on subpath and absent from root"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/packaged-install.e2e.test.ts",
+          "line": 99,
+          "note": "verifies runner subpath in installed tarball"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/README.md",
+          "line": 268,
+          "note": "documents stable subpath runner API for ESM/CJS"
         }
       ],
-      "impact": "Programmatic integrations must shell out to CLI.",
-      "recommendation": "Publish runner entrypoint with stability contract and tests.",
+      "impact": "Programmatic consumers can call the full pipeline runner directly without shelling out to the CLI.",
+      "recommendation": "Maintain SemVer stability for @imageforge/cli/runner and keep root API intentionally runner-free.",
       "owner": "CLI Core",
-      "verification": ["Package export contract test"]
+      "verification": [
+        "pnpm run check",
+        "pnpm run test:e2e",
+        "node -e \"require('@imageforge/cli/runner')\"",
+        "node --input-type=module -e \"import '@imageforge/cli/runner'\""
+      ]
     },
     {
       "id": "IF-CLI-DX-004",

@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "child_process";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import {
   convertImage,
@@ -14,9 +15,11 @@ import {
   outputPathFor,
   processImage,
   toPosix,
-} from "../src/processor";
-import { getDefaultConcurrency } from "../src/runner";
+} from "../src/processor.js";
+import { getDefaultConcurrency } from "../src/runner.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const ROOT = path.join(__dirname, "..");
 const FIXTURES = path.join(__dirname, "fixtures");
 const OUTPUT = path.join(__dirname, "test-output");
@@ -1779,7 +1782,7 @@ describe("config support", () => {
 });
 
 describe("package exports", () => {
-  it("exposes root and processor subpath exports", () => {
+  it("exposes CJS require exports for root, processor, and runner subpaths", () => {
     const consumerDir = path.join(OUTPUT, "consumer");
     const scopeDir = path.join(consumerDir, "node_modules", "@imageforge");
     const packageLink = path.join(scopeDir, "cli");
@@ -1791,12 +1794,50 @@ describe("package exports", () => {
     const script = [
       "const root = require('@imageforge/cli');",
       "const processor = require('@imageforge/cli/processor');",
+      "const runner = require('@imageforge/cli/runner');",
       "if (typeof root.processImage !== 'function') throw new Error('missing root processImage export');",
+      "if ('runImageforge' in root) throw new Error('runner should not be exported from root');",
       "if (typeof processor.convertImage !== 'function') throw new Error('missing processor convertImage export');",
+      "if (typeof runner.runImageforge !== 'function') throw new Error('missing runner runImageforge export');",
+      "if (typeof runner.getDefaultConcurrency !== 'function') throw new Error('missing runner getDefaultConcurrency export');",
       "console.log('ok');",
     ].join(" ");
 
     const result = spawnSync("node", ["-e", script], {
+      cwd: consumerDir,
+      encoding: "utf-8",
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("ok");
+  });
+
+  it("exposes ESM import exports for root, processor, and runner subpaths", () => {
+    const consumerDir = path.join(OUTPUT, "consumer-esm");
+    const scopeDir = path.join(consumerDir, "node_modules", "@imageforge");
+    const packageLink = path.join(scopeDir, "cli");
+
+    fs.rmSync(consumerDir, { recursive: true, force: true });
+    fs.mkdirSync(scopeDir, { recursive: true });
+    fs.symlinkSync(ROOT, packageLink, "dir");
+
+    const script = [
+      "import * as root from '@imageforge/cli';",
+      "import * as processor from '@imageforge/cli/processor';",
+      "import * as runner from '@imageforge/cli/runner';",
+      "if (typeof root.processImage !== 'function') throw new Error('missing root processImage export');",
+      "if ('runImageforge' in root) throw new Error('runner should not be exported from root');",
+      "if (typeof processor.convertImage !== 'function') throw new Error('missing processor convertImage export');",
+      "if (typeof runner.runImageforge !== 'function') throw new Error('missing runner runImageforge export');",
+      "if (typeof runner.getDefaultConcurrency !== 'function') throw new Error('missing runner getDefaultConcurrency export');",
+      "console.log('ok');",
+    ].join(" ");
+
+    const result = spawnSync("node", ["--input-type=module", "-e", script], {
       cwd: consumerDir,
       encoding: "utf-8",
     });

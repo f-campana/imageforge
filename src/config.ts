@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { MAX_WIDTH_COUNT, normalizeRequestedWidths } from "./responsive";
+import { MAX_WIDTH_COUNT, normalizeRequestedWidths } from "./responsive.js";
 
 export interface ImageForgeConfig {
   output?: string;

@@ -261,14 +261,30 @@ export function getSrcSet(src: string, format: "webp" | "avif") {
 
 ## Programmatic API
 
-ImageForge exports processor helpers from package root and `./processor` subpath:
+ImageForge supports both ESM (`import`) and CJS (`require`) consumers.
+
+Root exports processor helpers and manifest types.
+
+Runner functions are exposed on a stable subpath API: `@imageforge/cli/runner`.
+
+ESM:
+
+```ts
+import * as imageforge from "@imageforge/cli";
+import * as processor from "@imageforge/cli/processor";
+import { getDefaultConcurrency, runImageforge } from "@imageforge/cli/runner";
+```
+
+CJS:
 
 ```ts
 const imageforge = require("@imageforge/cli");
 const processor = require("@imageforge/cli/processor");
+const { getDefaultConcurrency, runImageforge } = require("@imageforge/cli/runner");
 ```
 
-Useful exports include `processImage`, `convertImage`, `generateBlurDataURL`, and manifest types.
+Useful root exports include `processImage`, `convertImage`, `generateBlurDataURL`, and manifest
+types. The runner API is intentionally subpath-only and semver-stable.
 
 ## Source Input Scope
 

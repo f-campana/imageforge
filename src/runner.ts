@@ -11,10 +11,10 @@ import {
   outputPathFor,
   processImage,
   toPosix,
-} from "./processor";
-import type { DiscoveryWarning, ImageResult, OutputFormat, ProcessOptions } from "./processor";
-import { resolveEffectiveWidths, resolveOrientedDimensions } from "./responsive";
-import type { ImageForgeEntry, ImageForgeManifest, ImageForgeVariant } from "./types";
+} from "./processor.js";
+import type { DiscoveryWarning, ImageResult, OutputFormat, ProcessOptions } from "./processor.js";
+import { resolveEffectiveWidths, resolveOrientedDimensions } from "./responsive.js";
+import type { ImageForgeEntry, ImageForgeManifest, ImageForgeVariant } from "./types.js";
 
 interface CacheEntry {
   hash: string;

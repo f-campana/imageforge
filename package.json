@@ -12,31 +12,44 @@
     "url": "https://github.com/f-campana/imageforge/issues"
   },
   "homepage": "https://github.com/f-campana/imageforge#readme",
+  "type": "module",
   "packageManager": "pnpm@10.28.2",
   "bin": {
     "imageforge": "./dist/cli.js"
   },
-  "main": "./dist/index.js",
+  "main": "./dist/cjs/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/cjs/index.js"
     },
     "./processor": {
       "types": "./dist/processor.d.ts",
-      "require": "./dist/processor.js"
+      "import": "./dist/processor.js",
+      "require": "./dist/cjs/processor.js"
+    },
+    "./runner": {
+      "types": "./dist/runner.d.ts",
+      "import": "./dist/runner.js",
+      "require": "./dist/cjs/runner.js"
     },
     "./types": {
       "types": "./dist/types.d.ts",
-      "require": "./dist/types.js"
+      "import": "./dist/types.js",
+      "require": "./dist/cjs/types.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "clean": "rm -rf dist",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cjs:package": "node --input-type=module -e \"import fs from 'node:fs'; fs.mkdirSync('dist/cjs', { recursive: true }); fs.writeFileSync('dist/cjs/package.json', JSON.stringify({ type: 'commonjs' }, null, 2) + '\\n');\"",
+    "build": "pnpm run clean && pnpm run build:esm && pnpm run build:cjs && pnpm run build:cjs:package",
     "dev": "tsc --watch",
     "bench:dataset:fetch": "node scripts/bench/fetch-sources.mjs",
     "bench:dataset:synthetic": "node scripts/bench/generate-synthetic.mjs",
@@ -49,7 +62,7 @@
     "bench:export-site-snapshot": "node scripts/bench/export-site-snapshot.mjs",
     "bench:sync-site": "node scripts/bench/sync-site-benchmark.mjs",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
-    "pretest": "tsc",
+    "pretest": "pnpm run build",
     "test": "vitest run --exclude tests/packaged-install.e2e.test.ts",
     "pretest:e2e": "pnpm run build",
     "test:e2e": "vitest run tests/packaged-install.e2e.test.ts",
@@ -60,7 +73,7 @@
     "format:check": "prettier . --check",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm test",
     "release:verify": "pnpm run check && pnpm run build && npm_config_cache=/tmp/npm-cache pnpm pack --dry-run",
-    "prepack": "tsc",
+    "prepack": "pnpm run build",
     "prepublishOnly": "pnpm run check && pnpm run build"
   },
   "keywords": [

@@ -2,7 +2,7 @@
   "reportDate": "2026-02-19",
   "baselineDate": "2026-02-15",
   "baselineSource": "Prior audit snapshot provided in thread (2026-02-15).",
-  "generatedAt": "2026-02-19T22:27:19.205Z",
+  "generatedAt": "2026-02-19T23:39:24Z",
   "scope": {
     "imageforge": {
       "path": "/Users/fabiencampana/Documents/ImageForge",
@@ -12,8 +12,8 @@
     "imageforgeSite": {
       "path": "/Users/fabiencampana/Documents/imageforge-site",
       "branch": "main",
-      "sha": "5b930e5e20a0bfd267afdac35214af6eb1048274",
-      "analyzedViaArchiveAt": "/tmp/imageforge-audit/site-main-2xX1Hb"
+      "sha": "3fabfa6f8473799baaa077949546fab321df9d5c",
+      "analyzedViaArchiveAt": "/Users/fabiencampana/Documents/imageforge-site"
     }
   },
   "verificationRuns": [
@@ -79,13 +79,27 @@
       "command": "pnpm audit --prod --audit-level=high",
       "status": "fail",
       "note": "npm audit endpoint 500 (ERR_PNPM_AUDIT_BAD_RESPONSE)"
+    },
+    {
+      "timestamp": "2026-02-19T23:37:44Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: animation-safety",
+      "status": "pass",
+      "note": "PR #28 required safety gate passed"
+    },
+    {
+      "timestamp": "2026-02-19T23:37:57Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: quality-gates-advisory",
+      "status": "pass",
+      "note": "Advisory unit/e2e/visual/lhci stack executed with artifacts"
     }
   ],
   "deltaCounts": {
-    "New": 11,
+    "New": 10,
     "Changed": 5,
-    "Unchanged": 9,
-    "Resolved": 8
+    "Unchanged": 8,
+    "Resolved": 10
   },
   "findings": [
     {
@@ -154,7 +168,9 @@
       "impact": "Compatibility footprint is narrower than necessary for many users.",
       "recommendation": "Re-evaluate minimum Node support and expand CI matrix if policy changes.",
       "owner": "CLI Core",
-      "verification": ["Matrix CI run on 20/22/24 (if policy updated)"]
+      "verification": [
+        "Matrix CI run on 20/22/24 (if policy updated)"
+      ]
     },
     {
       "id": "IF-CLI-DX-003",
@@ -222,7 +238,9 @@
       "impact": "Harder adoption and selective processing in mixed repos.",
       "recommendation": "Add staged DX enhancements for previewing and filtering work.",
       "owner": "CLI Product",
-      "verification": ["CLI integration tests for new flags/commands"]
+      "verification": [
+        "CLI integration tests for new flags/commands"
+      ]
     },
     {
       "id": "IF-CLI-PROD-005",
@@ -246,7 +264,9 @@
       "impact": "Migration friction for teams already using modern source formats.",
       "recommendation": "Add support or publish explicit roadmap/limitation guidance.",
       "owner": "CLI Product",
-      "verification": ["Discovery and processing tests for any newly supported formats"]
+      "verification": [
+        "Discovery and processing tests for any newly supported formats"
+      ]
     },
     {
       "id": "IF-CLI-MAINT-006",
@@ -270,7 +290,9 @@
       "impact": "Higher change risk and slower debugging/refactoring.",
       "recommendation": "Split by responsibility (cache/preflight/report/tests by module).",
       "owner": "CLI Core",
-      "verification": ["Refactor with unchanged behavioral snapshots and full test pass"]
+      "verification": [
+        "Refactor with unchanged behavioral snapshots and full test pass"
+      ]
     },
     {
       "id": "IF-CLI-TEST-007",
@@ -299,7 +321,9 @@
       "impact": "Critical failure paths can still regress silently.",
       "recommendation": "Add focused unit tests for cache atomicity, preflight corrupt images with widths, and invalid orientation values.",
       "owner": "CLI QA",
-      "verification": ["pnpm test with new targeted test cases"]
+      "verification": [
+        "pnpm test with new targeted test cases"
+      ]
     },
     {
       "id": "IF-CLI-TEST-008",
@@ -318,7 +342,9 @@
       "impact": "Direct one-shot npx package resolution remains untested.",
       "recommendation": "Add isolated remote-style npx scenario without pre-install.",
       "owner": "CLI QA",
-      "verification": ["Extended e2e test case for direct package execution"]
+      "verification": [
+        "Extended e2e test case for direct package execution"
+      ]
     },
     {
       "id": "IF-CLI-SEC-009",
@@ -347,7 +373,9 @@
       "impact": "Possible ANSI/log injection via crafted file names.",
       "recommendation": "Escape or strip control characters before terminal output.",
       "owner": "CLI Security",
-      "verification": ["Log-safety test with crafted filename containing escape sequences"]
+      "verification": [
+        "Log-safety test with crafted filename containing escape sequences"
+      ]
     },
     {
       "id": "IF-CLI-SEC-010",
@@ -366,7 +394,9 @@
       "impact": "Large files can increase memory pressure and destabilize runs.",
       "recommendation": "Use streaming hash computation and enforce max file size controls.",
       "owner": "CLI Core",
-      "verification": ["Large-file stress test"]
+      "verification": [
+        "Large-file stress test"
+      ]
     },
     {
       "id": "IF-CLI-BENCH-011",
@@ -464,7 +494,9 @@
       "impact": "Regressions can merge without explicit override decision.",
       "recommendation": "Introduce optional strict mode for release/hardening contexts.",
       "owner": "CLI Benchmark",
-      "verification": ["Workflow strict-mode simulation with induced regression"]
+      "verification": [
+        "Workflow strict-mode simulation with induced regression"
+      ]
     },
     {
       "id": "IF-CLI-SEC-014",
@@ -535,7 +567,9 @@
       "impact": "Behavioral drift risk on future edits.",
       "recommendation": "Centralize common guards/constants.",
       "owner": "CLI Core",
-      "verification": ["pnpm run typecheck && pnpm test after extraction"]
+      "verification": [
+        "pnpm run typecheck && pnpm test after extraction"
+      ]
     },
     {
       "id": "IF-CLI-MAINT-016",
@@ -559,7 +593,9 @@
       "impact": "Release automation state clarity improved.",
       "recommendation": "Keep release metadata contract under CI validation.",
       "owner": "CLI Release",
-      "verification": ["Release Please workflow run/dry-run"]
+      "verification": [
+        "Release Please workflow run/dry-run"
+      ]
     },
     {
       "id": "IF-SITE-PROD-017",
@@ -583,7 +619,10 @@
       "impact": "Claim traceability and credibility improved.",
       "recommendation": "Maintain sync cadence and stale snapshot alerting.",
       "owner": "Site Product + Benchmark",
-      "verification": ["pnpm run benchmark:test", "Render /benchmarks/latest"]
+      "verification": [
+        "pnpm run benchmark:test",
+        "Render /benchmarks/latest"
+      ]
     },
     {
       "id": "IF-SITE-PROD-018",
@@ -612,7 +651,9 @@
       "impact": "Prior analytics gap is closed.",
       "recommendation": "Add event-level validation when custom events are enabled.",
       "owner": "Site Growth",
-      "verification": ["Manual ?analytics=off/on validation in browser"]
+      "verification": [
+        "Manual ?analytics=off/on validation in browser"
+      ]
     },
     {
       "id": "IF-SITE-MAINT-019",
@@ -636,7 +677,9 @@
       "impact": "Unnecessary runtime dependency surface and audit scope expansion.",
       "recommendation": "Move googleapis to devDependencies.",
       "owner": "Site Platform",
-      "verification": ["pnpm install/build/seo:test after dependency move"]
+      "verification": [
+        "pnpm install/build/seo:test after dependency move"
+      ]
     },
     {
       "id": "IF-SITE-PROD-020",
@@ -660,36 +703,53 @@
       "impact": "Risk of stale external pricing claims over time.",
       "recommendation": "Automate stale-claim detection with a blocking freshness threshold.",
       "owner": "Site Product + Growth",
-      "verification": ["Scheduled freshness check in CI/governance workflow"]
+      "verification": [
+        "Scheduled freshness check in CI/governance workflow"
+      ]
     },
     {
       "id": "IF-SITE-TEST-021",
       "repo": "imageforge-site",
       "domain": "UI Validation",
       "severity": "High",
-      "deltaStatus": "Changed",
-      "finding": "Interactive UI surface grew, but component-level tests are still absent.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 3: site now has Vitest component/hook tests, Playwright E2E smoke tests, and visual regression snapshots wired into an advisory CI workflow.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/InstallCommands.tsx",
-          "line": 46,
-          "note": "keyboard interaction logic present"
-        },
-        {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/CopyButton.tsx",
-          "line": 14,
-          "note": "clipboard interaction logic present"
-        },
-        {
           "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
-          "line": 20,
-          "note": "tests cover scripts, not React components"
+          "line": 14,
+          "note": "adds test:unit/test:e2e/test:visual scripts"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/unit/components/landing/InstallCommands.test.tsx",
+          "line": 11,
+          "note": "keyboard and ARIA tab behavior coverage"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/unit/components/landing/CopyButton.test.tsx",
+          "line": 8,
+          "note": "clipboard success/failure path coverage"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/e2e/landing-and-benchmark.smoke.spec.ts",
+          "line": 3,
+          "note": "route-level smoke checks for / and /benchmarks/latest"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/quality-gates.yml",
+          "line": 42,
+          "note": "advisory CI execution for unit/e2e/visual/lhci"
         }
       ],
-      "impact": "Higher chance of unnoticed keyboard/clipboard/motion regressions.",
-      "recommendation": "Add component/integration tests for core landing and benchmark interactions.",
+      "impact": "Primary UI interaction regressions now have automated detection before merge.",
+      "recommendation": "Keep these suites green and tune flake before promoting any subset to blocking.",
       "owner": "Site Frontend QA",
-      "verification": ["Add and run UI component test suite in CI"]
+      "verification": [
+        "pnpm test:unit",
+        "pnpm test:e2e",
+        "pnpm test:visual",
+        "GitHub Actions check run: quality-gates-advisory (PR #28)"
+      ]
     },
     {
       "id": "IF-SITE-UX-022",
@@ -718,7 +778,9 @@
       "impact": "Core safety controls are now continuously verifiable.",
       "recommendation": "Keep strict gates for safety and advisory scoring for style density.",
       "owner": "Site UX",
-      "verification": ["pnpm run animation:check"]
+      "verification": [
+        "pnpm run animation:check"
+      ]
     },
     {
       "id": "IF-SITE-SEO-023",
@@ -747,7 +809,9 @@
       "impact": "Signal-to-noise degradation in SEO checks can mask true issues.",
       "recommendation": "Evaluate H1 per route render output, not source-text global count.",
       "owner": "Site SEO",
-      "verification": ["pnpm run seo:check after rule update"]
+      "verification": [
+        "pnpm run seo:check after rule update"
+      ]
     },
     {
       "id": "IF-SITE-SEO-024",
@@ -771,7 +835,9 @@
       "impact": "Advisory output contains expected env-noise unrelated to production metadata.",
       "recommendation": "Skip/adjust public-metadata check when placeholder domain is in use.",
       "owner": "Site SEO",
-      "verification": ["pnpm run check:ci with placeholder-aware SEO mode"]
+      "verification": [
+        "pnpm run check:ci with placeholder-aware SEO mode"
+      ]
     },
     {
       "id": "IF-SITE-SEC-025",
@@ -790,7 +856,9 @@
       "impact": "Missed defense-in-depth opportunity for browser-side protections.",
       "recommendation": "Add baseline security headers and validate compatibility.",
       "owner": "Site Security",
-      "verification": ["Header scan on preview deployment"]
+      "verification": [
+        "Header scan on preview deployment"
+      ]
     },
     {
       "id": "IF-SITE-MAINT-026",
@@ -814,7 +882,9 @@
       "impact": "Limits long-tail discoverability and direct feedback capture.",
       "recommendation": "Add lightweight first-party docs and feedback entrypoint.",
       "owner": "Site Product + Growth",
-      "verification": ["Route smoke tests for new docs/feedback paths"]
+      "verification": [
+        "Route smoke tests for new docs/feedback paths"
+      ]
     },
     {
       "id": "IF-SITE-SEC-027",
@@ -843,7 +913,9 @@
       "impact": "Inconsistent supply-chain risk control and update governance.",
       "recommendation": "Adopt one pinning policy and enforce it automatically.",
       "owner": "Site Platform + Security",
-      "verification": ["Workflow policy lint in CI"]
+      "verification": [
+        "Workflow policy lint in CI"
+      ]
     },
     {
       "id": "IF-X-VAL-028",
@@ -867,7 +939,9 @@
       "impact": "Red gate adds noise to release readiness and local CI parity.",
       "recommendation": "Normalize formatting baseline or scope gate exclusions for archival docs.",
       "owner": "CLI Maintainers",
-      "verification": ["pnpm run check exits 0"]
+      "verification": [
+        "pnpm run check exits 0"
+      ]
     },
     {
       "id": "IF-X-VAL-029",
@@ -886,7 +960,9 @@
       "impact": "Security scan reliability gap when audit service is unavailable.",
       "recommendation": "Add retry/backoff policy and fallback scanner path in CI.",
       "owner": "Site Platform",
-      "verification": ["pnpm audit with fallback path validation"]
+      "verification": [
+        "pnpm audit with fallback path validation"
+      ]
     },
     {
       "id": "IF-X-SEC-030",
@@ -915,7 +991,9 @@
       "impact": "Inconsistent security posture and governance overhead across repos.",
       "recommendation": "Define org-level policy and enforce via automated workflow checks.",
       "owner": "Platform/SecOps",
-      "verification": ["Cross-repo workflow policy audit"]
+      "verification": [
+        "Cross-repo workflow policy audit"
+      ]
     },
     {
       "id": "IF-X-DX-031",
@@ -939,69 +1017,85 @@
       "impact": "Improved CI/debug feedback compared with prior audit baseline.",
       "recommendation": "Maintain this behavior and preserve parity in JSON mode metadata.",
       "owner": "CLI Product",
-      "verification": ["imageforge <dir> --check output inspection"]
+      "verification": [
+        "imageforge <dir> --check output inspection"
+      ]
     },
     {
       "id": "IF-X-TEST-032",
       "repo": "imageforge",
       "domain": "Coverage Strategy",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "Coverage and mutation-style assurance strategy remains incomplete across CLI and site UI layers.",
+      "deltaStatus": "Changed",
+      "finding": "Coverage strategy improved materially on site UI (unit/component + E2E + visual + LHCI), but cross-repo coverage reporting and mutation/fault-injection governance remain incomplete.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/vitest.config.ts",
           "line": 3,
-          "note": "no coverage config"
+          "note": "no coverage thresholds/reporting configured for CLI tests"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
-          "line": 20,
-          "note": "script tests present, no UI component coverage layer"
+          "line": 14,
+          "note": "new unit/e2e/visual/lhci scripts and quality gate bundle"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/unit/components/benchmark/BenchmarkPageContent.test.tsx",
+          "line": 10,
+          "note": "site component test layer now exists"
         }
       ],
-      "impact": "Regression detection strength is hard to quantify over time.",
-      "recommendation": "Introduce coverage reporting first, then targeted mutation/fault-injection for critical paths.",
+      "impact": "Regression detection breadth improved, but effectiveness trends are still hard to quantify without coverage and fault-injection signals.",
+      "recommendation": "Add coverage artifacts/threshold trends for both repos, then phase in mutation or targeted fault-injection for critical paths.",
       "owner": "CLI QA + Site QA",
-      "verification": ["CI coverage artifact publication and trend tracking"]
+      "verification": [
+        "CI coverage artifact publication in both repos",
+        "Periodic mutation/fault-injection run reports for critical modules"
+      ]
     },
     {
       "id": "IF-SITE-UX-033",
       "repo": "imageforge-site",
       "domain": "Motion Quality",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "Current animation safety checks validate structural safety but do not measure rendering smoothness or visual drift (FPS/frame-drop or screenshot diff).",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 3: motion-quality regression detection now includes Lighthouse CI lab checks and Playwright visual diffs for critical landing/benchmark states.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/animation/assert-core-safety.mts",
-          "line": 60,
-          "note": "Checks focus on overflow, reduced-motion parity, and critical content visibility"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/lighthouserc.json",
+          "line": 4,
+          "note": "LHCI collects / and /benchmarks/latest with advisory assertions"
         },
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/animation/collect-matrix.mts",
-          "line": 102,
-          "note": "Collector records structural page metrics, not frame performance"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/visual/landing.visual.spec.ts",
+          "line": 15,
+          "note": "committed screenshot baseline for landing hero/install area"
         },
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/animation-safety.yml",
-          "line": 41,
-          "note": "Workflow runs animation:check without visual/fps regression suite"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/visual/benchmark.visual.spec.ts",
+          "line": 15,
+          "note": "committed screenshot baseline for benchmark hero/summary area"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/quality-gates.yml",
+          "line": 69,
+          "note": "advisory CI execution of LHCI and visual suites with artifact retention"
         }
       ],
-      "impact": "Motion-quality regressions can pass existing gates while still degrading UX polish and readability under load.",
-      "recommendation": "Add LHCI and targeted Playwright visual snapshots as complementary non-blocking checks before any threshold hard-gating.",
+      "impact": "Visual/motion drift now has automated lab and screenshot signals beyond structural safety checks.",
+      "recommendation": "Keep advisory posture while calibrating thresholds and false-positive rates before any blocking transition.",
       "owner": "Site UX + Perf",
       "verification": [
-        "Planned: pnpm lhci autorun",
-        "Planned: Playwright screenshot regression suite for / and /benchmarks/latest"
+        "pnpm lhci",
+        "pnpm test:visual",
+        "GitHub Actions check run: quality-gates-advisory (PR #28)"
       ]
     }
   ],
   "decisionAddendum": {
     "title": "Animation Quality Tooling Decisions (Discussion Outcome)",
     "asOfDate": "2026-02-19",
-    "implementationState": "no-code-change",
+    "implementationState": "phase-3-implemented-advisory",
     "lockedDecisions": [
       {
         "item": "Adopt Lighthouse CI (@lhci/cli) for lab LCP/INP/CLS trend checks",

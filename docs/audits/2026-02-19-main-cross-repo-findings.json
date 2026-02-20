@@ -1,22 +1,71 @@
 {
-  "reportDate": "2026-02-19",
+  "reportDate": "2026-02-20",
   "baselineDate": "2026-02-15",
   "baselineSource": "Prior audit snapshot provided in thread (2026-02-15).",
-  "generatedAt": "2026-02-19T23:39:24Z",
+  "generatedAt": "2026-02-20T13:33:27Z",
   "scope": {
     "imageforge": {
       "path": "/Users/fabiencampana/Documents/ImageForge",
       "branch": "main",
-      "sha": "00a1584d4d22b06173d210f634f0bcc6652dd7e1"
+      "sha": "c0ecd1ad085f008df4be95804a907b909457f760"
     },
     "imageforgeSite": {
       "path": "/Users/fabiencampana/Documents/imageforge-site",
       "branch": "main",
-      "sha": "3fabfa6f8473799baaa077949546fab321df9d5c",
+      "sha": "fdf1dcf91cbfc765fd5e53a0128e9328fc7d544e",
       "analyzedViaArchiveAt": "/Users/fabiencampana/Documents/imageforge-site"
     }
   },
   "verificationRuns": [
+    {
+      "timestamp": "2026-02-20T14:27:20Z",
+      "repo": "imageforge-site",
+      "command": "node scripts/security/check-workflow-action-pinning.mjs",
+      "status": "pass",
+      "note": "6 workflow files passed policy check"
+    },
+    {
+      "timestamp": "2026-02-20T14:26:42Z",
+      "repo": "imageforge-site",
+      "command": "pnpm run test:e2e",
+      "status": "pass",
+      "note": "Playwright smoke passed including security-header assertions"
+    },
+    {
+      "timestamp": "2026-02-20T14:26:22Z",
+      "repo": "imageforge-site",
+      "command": "pnpm run audit:prod:reliable",
+      "status": "pass",
+      "note": "Primary pnpm audit passed; retry/fallback path active"
+    },
+    {
+      "timestamp": "2026-02-20T14:25:44Z",
+      "repo": "imageforge-site",
+      "command": "pnpm run check:ci",
+      "status": "pass",
+      "note": "lint/typecheck/format/build/seo gates passed"
+    },
+    {
+      "timestamp": "2026-02-20T14:27:20Z",
+      "repo": "imageforge",
+      "command": "node scripts/security/check-workflow-action-pinning.mjs",
+      "status": "pass",
+      "note": "6 workflow files passed policy check"
+    },
+    {
+      "timestamp": "2026-02-20T14:25:24Z",
+      "repo": "imageforge",
+      "command": "pnpm run test:e2e",
+      "status": "pass",
+      "note": "Packaged install + npx flow passed"
+    },
+    {
+      "timestamp": "2026-02-20T14:25:11Z",
+      "repo": "imageforge",
+      "command": "pnpm run check",
+      "status": "pass",
+      "note": "typecheck/lint/format/test all passed (100 tests)"
+    },
     {
       "timestamp": "2026-02-19T16:07:58Z",
       "repo": "imageforge",
@@ -96,10 +145,10 @@
     }
   ],
   "deltaCounts": {
-    "New": 10,
-    "Changed": 5,
-    "Unchanged": 8,
-    "Resolved": 10
+    "New": 4,
+    "Changed": 4,
+    "Unchanged": 7,
+    "Resolved": 18
   },
   "findings": [
     {
@@ -339,48 +388,61 @@
       "repo": "imageforge",
       "domain": "Output Safety",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "Per-file logging prints raw relative paths without control character sanitization.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: terminal-facing file path and error output now sanitize control characters before rendering.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
-          "line": 896,
-          "note": "needs-processing output includes raw path"
+          "line": 146,
+          "note": "sanitizeForTerminal utility added for user-facing output"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
-          "line": 904,
-          "note": "failed output includes raw path"
+          "line": 910,
+          "note": "relative path logging now uses sanitized value"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
-          "line": 913,
-          "note": "processed output includes raw path"
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/imageforge.test.ts",
+          "line": 1355,
+          "note": "regression test validates escaped control characters in --check output"
         }
       ],
-      "impact": "Possible ANSI/log injection via crafted file names.",
-      "recommendation": "Escape or strip control characters before terminal output.",
+      "impact": "Crafted filenames can no longer inject raw ANSI/control sequences into CLI output streams.",
+      "recommendation": "Keep sanitization on all user-facing logs and preserve regression tests for escaped output behavior.",
       "owner": "CLI Security",
-      "verification": ["Log-safety test with crafted filename containing escape sequences"]
+      "verification": [
+        "pnpm run check",
+        "vitest: --check sanitizes control characters in logged file paths"
+      ]
     },
     {
       "id": "IF-CLI-SEC-010",
       "repo": "imageforge",
       "domain": "Resource Safety",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "Hashing currently loads entire file into memory synchronously.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: file hashing moved from full-buffer readFileSync to chunked sync reads with constant memory footprint.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/processor.ts",
+          "line": 47,
+          "note": "fixed-size hash chunk constant"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/processor.ts",
           "line": 113,
-          "note": "fs.readFileSync in fileHash"
+          "note": "chunked hashing loop in fileHash"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/imageforge.test.ts",
+          "line": 398,
+          "note": "large-file hash regression test"
         }
       ],
-      "impact": "Large files can increase memory pressure and destabilize runs.",
-      "recommendation": "Use streaming hash computation and enforce max file size controls.",
+      "impact": "Large-file hashing no longer requires loading the entire file in memory before digesting.",
+      "recommendation": "Retain chunked hash implementation and keep large-file regression test coverage.",
       "owner": "CLI Core",
-      "verification": ["Large-file stress test"]
+      "verification": ["pnpm run check", "vitest: hashes large files correctly with chunked reads"]
     },
     {
       "id": "IF-CLI-BENCH-011",
@@ -633,24 +695,29 @@
       "repo": "imageforge-site",
       "domain": "Dependency Surface",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "googleapis remains in production dependencies despite script-only usage.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: googleapis moved from production dependencies to devDependencies for script-only usage.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
-          "line": 32,
-          "note": "googleapis in dependencies"
+          "line": 47,
+          "note": "devDependencies block now contains googleapis"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
+          "line": 59,
+          "note": "googleapis listed under devDependencies"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/gsc.mjs",
           "line": 1,
-          "note": "used in SEO script context"
+          "note": "usage remains script-scoped"
         }
       ],
-      "impact": "Unnecessary runtime dependency surface and audit scope expansion.",
-      "recommendation": "Move googleapis to devDependencies.",
+      "impact": "Production dependency surface is reduced while SEO tooling remains functional.",
+      "recommendation": "Keep script-only packages in devDependencies and validate with CI install/build/SEO runs.",
       "owner": "Site Platform",
-      "verification": ["pnpm install/build/seo:test after dependency move"]
+      "verification": ["pnpm run check:ci", "pnpm run seo:test"]
     },
     {
       "id": "IF-SITE-PROD-020",
@@ -807,19 +874,29 @@
       "repo": "imageforge-site",
       "domain": "Web Security Hardening",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "No explicit security headers are configured in Next.js config.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: baseline security headers are configured in Next.js and validated by E2E assertions.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/next.config.ts",
           "line": 3,
-          "note": "empty config object"
+          "note": "securityHeaders policy defined"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/next.config.ts",
+          "line": 37,
+          "note": "headers() applies policy to all routes"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/e2e/landing-and-benchmark.smoke.spec.ts",
+          "line": 64,
+          "note": "E2E checks required headers on landing and benchmark routes"
         }
       ],
-      "impact": "Missed defense-in-depth opportunity for browser-side protections.",
-      "recommendation": "Add baseline security headers and validate compatibility.",
+      "impact": "Defense-in-depth browser protections are now emitted consistently on key routes.",
+      "recommendation": "Keep header policy in Next config and maintain E2E assertions for / and /benchmarks/latest.",
       "owner": "Site Security",
-      "verification": ["Header scan on preview deployment"]
+      "verification": ["pnpm run test:e2e"]
     },
     {
       "id": "IF-SITE-MAINT-026",
@@ -850,101 +927,137 @@
       "repo": "imageforge-site",
       "domain": "CI Supply Chain",
       "severity": "Medium",
-      "deltaStatus": "Changed",
-      "finding": "Action pinning remains mixed between SHA-pinned and floating tags.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: site workflows are SHA-pinned and action-pinning policy is enforced in CI.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
-          "line": 19,
-          "note": "SHA-pinned checkout usage exists"
+          "line": 13,
+          "note": "workflow-action-pinning required job"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
-          "line": 43,
-          "note": "floating @v tags also exist"
+          "line": 150,
+          "note": "security-audit job also uses pinned actions"
         },
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/semantic-pr-title.yml",
-          "line": 19,
-          "note": "floating action tag"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/security/check-workflow-action-pinning.mjs",
+          "line": 1,
+          "note": "policy script validates pinned refs"
         }
       ],
-      "impact": "Inconsistent supply-chain risk control and update governance.",
-      "recommendation": "Adopt one pinning policy and enforce it automatically.",
+      "impact": "Floating-action drift is blocked automatically instead of relying on manual review consistency.",
+      "recommendation": "Keep workflow-action-pinning required and update SHAs through action-update PRs.",
       "owner": "Site Platform + Security",
-      "verification": ["Workflow policy lint in CI"]
+      "verification": [
+        "node scripts/security/check-workflow-action-pinning.mjs",
+        "GitHub Actions job: workflow-action-pinning"
+      ]
     },
     {
       "id": "IF-X-VAL-028",
       "repo": "imageforge",
       "domain": "Quality Gate Health",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "Main branch local quality gate is currently red due doc formatting drift.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 4: formatting drift on audit artifacts was normalized and check is green again on main.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
-          "line": 60,
-          "note": "check script includes format:check"
+          "path": "/Users/fabiencampana/Documents/ImageForge/docs/audits/2026-02-19-main-cross-repo-findings.md",
+          "line": 1,
+          "note": "formatted audit artifact committed"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/docs/agent-briefs/README.md",
+          "path": "/Users/fabiencampana/Documents/ImageForge/docs/audits/2026-02-19-main-cross-repo-findings.json",
           "line": 1,
-          "note": "one of flagged files in current check output"
+          "note": "formatted audit artifact committed"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
+          "line": 75,
+          "note": "check gate includes format:check and now passes"
         }
       ],
-      "impact": "Red gate adds noise to release readiness and local CI parity.",
-      "recommendation": "Normalize formatting baseline or scope gate exclusions for archival docs.",
+      "impact": "Local and CI quality-gate parity is restored for release checks.",
+      "recommendation": "Keep audit artifacts formatting-stable and preserve check gate strictness.",
       "owner": "CLI Maintainers",
-      "verification": ["pnpm run check exits 0"]
+      "verification": ["pnpm run check"]
     },
     {
       "id": "IF-X-VAL-029",
       "repo": "imageforge-site",
       "domain": "Security Validation Reliability",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "Prod dependency audit is currently non-deterministic due external npm audit endpoint failures.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: prod dependency auditing retries transient failures and falls back to OSV with fail-closed behavior.",
       "evidence": [
         {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/security/audit-prod-deps.mjs",
+          "line": 5,
+          "note": "retry configuration for primary scanner"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/security/audit-prod-deps.mjs",
+          "line": 214,
+          "note": "retry loop + fallback orchestration"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
+          "line": 150,
+          "note": "dedicated security-audit job executes reliable wrapper"
+        },
+        {
           "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
-          "line": 28,
-          "note": "production deps are subject to audit command"
+          "line": 27,
+          "note": "audit:prod:reliable script entrypoint"
         }
       ],
-      "impact": "Security scan reliability gap when audit service is unavailable.",
-      "recommendation": "Add retry/backoff policy and fallback scanner path in CI.",
+      "impact": "Security audit gate is deterministic even when npm audit has transient outages.",
+      "recommendation": "Retain retry/fallback fail-closed logic and periodically exercise fallback path.",
       "owner": "Site Platform",
-      "verification": ["pnpm audit with fallback path validation"]
+      "verification": ["pnpm run audit:prod:reliable", "GitHub Actions job: security-audit"]
     },
     {
       "id": "IF-X-SEC-030",
       "repo": "imageforge",
       "domain": "Cross-Repo Supply Chain",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "No unified workflow action pinning policy across both repositories.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 5: both repos enforce a unified SHA-pinning workflow policy with CI checks.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/ci.yml",
-          "line": 19,
-          "note": "floating tags in CLI workflows"
+          "line": 13,
+          "note": "workflow-action-pinning required job in CLI repo"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/benchmark-ci.yml",
+          "line": 257,
+          "note": "benchmark publish job uses pinned setup actions"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/scripts/security/check-workflow-action-pinning.mjs",
+          "line": 1,
+          "note": "CLI repo policy checker"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
-          "line": 19,
-          "note": "mixed pinning strategy in site workflows"
+          "line": 13,
+          "note": "workflow-action-pinning required job in site repo"
         },
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/animation-safety.yml",
-          "line": 22,
-          "note": "floating tags in additional workflows"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/security/check-workflow-action-pinning.mjs",
+          "line": 1,
+          "note": "site repo policy checker"
         }
       ],
-      "impact": "Inconsistent security posture and governance overhead across repos.",
-      "recommendation": "Define org-level policy and enforce via automated workflow checks.",
+      "impact": "Cross-repo workflow supply-chain policy is now consistent and automatically enforced.",
+      "recommendation": "Keep both policy checks required and update pinned SHAs through automated action dependency PRs.",
       "owner": "Platform/SecOps",
-      "verification": ["Cross-repo workflow policy audit"]
+      "verification": [
+        "node /Users/fabiencampana/Documents/ImageForge/scripts/security/check-workflow-action-pinning.mjs",
+        "node /Users/fabiencampana/Documents/imageforge-site/scripts/security/check-workflow-action-pinning.mjs"
+      ]
     },
     {
       "id": "IF-X-DX-031",

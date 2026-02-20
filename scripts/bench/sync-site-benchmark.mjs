@@ -9,6 +9,7 @@ import { parseArgs, readJson, resolvePath, writeJson } from "./common.mjs";
 import { assertValid, validateSiteSnapshot } from "./contracts.mjs";
 
 let activeRedact = (value) => String(value ?? "");
+const SITE_BENCHMARK_FILES = ["data/benchmarks/latest.json", "data/benchmarks/history.json"];
 
 function usage() {
   console.log(`Usage: node scripts/bench/sync-site-benchmark.mjs \\
@@ -38,6 +39,15 @@ function createRedactor(secretValues) {
 
 function formatCommand(command, args, redact) {
   return [command, ...args].map((part) => redact(part)).join(" ");
+}
+
+function normalizeSiteBenchmarkJson(cloneDir, redact) {
+  runChecked(
+    "pnpm",
+    ["exec", "prettier", "--write", ...SITE_BENCHMARK_FILES],
+    { cwd: cloneDir },
+    redact
+  );
 }
 
 function runChecked(command, args, options = {}, redact = activeRedact) {
@@ -351,6 +361,7 @@ async function main() {
       { cwd: cloneDir },
       redact
     );
+    normalizeSiteBenchmarkJson(cloneDir, redact);
 
     const status = runChecked("git", ["status", "--porcelain"], { cwd: cloneDir }, redact);
     if (status.stdout.trim().length === 0) {

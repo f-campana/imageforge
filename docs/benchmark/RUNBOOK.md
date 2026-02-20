@@ -79,6 +79,7 @@ Notes:
 1. Sync uses a dedicated automation branch and force-pushes updates to that branch.
 2. PRs are created/updated automatically, but never auto-merged.
 3. Required secret in CLI repo: `IMAGEFORGE_SITE_SYNC_TOKEN` with `contents:write` and PR write access on `imageforge-site`.
+4. Sync normalizes `data/benchmarks/latest.json` and `data/benchmarks/history.json` with repo-pinned Prettier (`pnpm exec prettier --write ...`) and fails closed if formatting cannot be applied.
 
 ## Dataset Release
 

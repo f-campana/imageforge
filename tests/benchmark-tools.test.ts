@@ -753,3 +753,122 @@ exit 1
     }
   });
 });
+
+describe("sync-site benchmark formatting", () => {
+  it("runs prettier normalization before checking git status", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-format-"));
+    const binDir = path.join(tempDir, "bin");
+    const templateRepoDir = path.join(tempDir, "site-template");
+    const opsLogPath = path.join(tempDir, "ops.log");
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.mkdirSync(path.join(templateRepoDir, "scripts", "benchmark"), { recursive: true });
+
+    fs.writeFileSync(
+      path.join(templateRepoDir, "scripts", "benchmark", "upsert-snapshot.mjs"),
+      `#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+
+const latestPath = path.resolve("data/benchmarks/latest.json");
+const historyPath = path.resolve("data/benchmarks/history.json");
+fs.mkdirSync(path.dirname(latestPath), { recursive: true });
+fs.writeFileSync(latestPath, '{"snapshotId":"raw"}', "utf-8");
+fs.writeFileSync(historyPath, '{"items":[{"snapshotId":"raw"}]}', "utf-8");
+`,
+      "utf-8"
+    );
+
+    const gitPath = path.join(binDir, "git");
+    fs.writeFileSync(
+      gitPath,
+      `#!/bin/sh
+printf "git %s\\n" "$*" >> "$IMAGEFORGE_TEST_OPS_LOG"
+
+if [ "$1" = "clone" ]; then
+  target=""
+  for arg in "$@"; do
+    target="$arg"
+  done
+  mkdir -p "$target"
+  cp -R "$IMAGEFORGE_TEST_SITE_TEMPLATE"/. "$target"
+  exit 0
+fi
+
+if [ "$1" = "ls-remote" ]; then
+  exit 1
+fi
+
+if [ "$1" = "status" ]; then
+  exit 0
+fi
+
+exit 0
+`,
+      { encoding: "utf-8", mode: 0o755 }
+    );
+    fs.chmodSync(gitPath, 0o755);
+
+    const pnpmPath = path.join(binDir, "pnpm");
+    fs.writeFileSync(
+      pnpmPath,
+      `#!/bin/sh
+printf "pnpm %s\\n" "$*" >> "$IMAGEFORGE_TEST_OPS_LOG"
+if [ "$1" = "exec" ] && [ "$2" = "prettier" ] && [ "$3" = "--write" ]; then
+  exit 0
+fi
+echo "unexpected pnpm invocation: $*" >&2
+exit 2
+`,
+      { encoding: "utf-8", mode: 0o755 }
+    );
+    fs.chmodSync(pnpmPath, 0o755);
+
+    const snapshotPath = path.join(tempDir, "snapshot.json");
+    const workspace = path.join(tempDir, "workspace");
+    writeJson(snapshotPath, makeSiteSnapshot());
+
+    try {
+      const result = spawnSync(
+        "node",
+        [
+          SYNC_SITE_BENCHMARK,
+          "--snapshot",
+          snapshotPath,
+          "--site-repo",
+          "f-campana/imageforge-site",
+          "--site-default-branch",
+          "main",
+          "--site-branch",
+          "codex/benchmark-sync-nightly",
+          "--workspace",
+          workspace,
+          "--token-env",
+          "TEST_SYNC_TOKEN",
+        ],
+        {
+          encoding: "utf-8",
+          env: {
+            ...process.env,
+            TEST_SYNC_TOKEN: "sync-format-token",
+            IMAGEFORGE_TEST_OPS_LOG: opsLogPath,
+            IMAGEFORGE_TEST_SITE_TEMPLATE: templateRepoDir,
+            PATH: `${binDir}:${process.env.PATH ?? ""}`,
+          },
+        }
+      );
+
+      expect(result.status).toBe(0);
+      const operations = fs.readFileSync(opsLogPath, "utf-8");
+      const prettierCommand =
+        "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json";
+      const gitStatusCommand = "git status --porcelain";
+      expect(operations).toContain(prettierCommand);
+      expect(operations).toContain(gitStatusCommand);
+      expect(operations.indexOf(prettierCommand)).toBeLessThan(
+        operations.indexOf(gitStatusCommand)
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

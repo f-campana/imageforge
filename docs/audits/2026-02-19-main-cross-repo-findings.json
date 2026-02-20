@@ -168,9 +168,7 @@
       "impact": "Compatibility footprint is narrower than necessary for many users.",
       "recommendation": "Re-evaluate minimum Node support and expand CI matrix if policy changes.",
       "owner": "CLI Core",
-      "verification": [
-        "Matrix CI run on 20/22/24 (if policy updated)"
-      ]
+      "verification": ["Matrix CI run on 20/22/24 (if policy updated)"]
     },
     {
       "id": "IF-CLI-DX-003",
@@ -238,9 +236,7 @@
       "impact": "Harder adoption and selective processing in mixed repos.",
       "recommendation": "Add staged DX enhancements for previewing and filtering work.",
       "owner": "CLI Product",
-      "verification": [
-        "CLI integration tests for new flags/commands"
-      ]
+      "verification": ["CLI integration tests for new flags/commands"]
     },
     {
       "id": "IF-CLI-PROD-005",
@@ -264,9 +260,7 @@
       "impact": "Migration friction for teams already using modern source formats.",
       "recommendation": "Add support or publish explicit roadmap/limitation guidance.",
       "owner": "CLI Product",
-      "verification": [
-        "Discovery and processing tests for any newly supported formats"
-      ]
+      "verification": ["Discovery and processing tests for any newly supported formats"]
     },
     {
       "id": "IF-CLI-MAINT-006",
@@ -290,9 +284,7 @@
       "impact": "Higher change risk and slower debugging/refactoring.",
       "recommendation": "Split by responsibility (cache/preflight/report/tests by module).",
       "owner": "CLI Core",
-      "verification": [
-        "Refactor with unchanged behavioral snapshots and full test pass"
-      ]
+      "verification": ["Refactor with unchanged behavioral snapshots and full test pass"]
     },
     {
       "id": "IF-CLI-TEST-007",
@@ -321,9 +313,7 @@
       "impact": "Critical failure paths can still regress silently.",
       "recommendation": "Add focused unit tests for cache atomicity, preflight corrupt images with widths, and invalid orientation values.",
       "owner": "CLI QA",
-      "verification": [
-        "pnpm test with new targeted test cases"
-      ]
+      "verification": ["pnpm test with new targeted test cases"]
     },
     {
       "id": "IF-CLI-TEST-008",
@@ -342,9 +332,7 @@
       "impact": "Direct one-shot npx package resolution remains untested.",
       "recommendation": "Add isolated remote-style npx scenario without pre-install.",
       "owner": "CLI QA",
-      "verification": [
-        "Extended e2e test case for direct package execution"
-      ]
+      "verification": ["Extended e2e test case for direct package execution"]
     },
     {
       "id": "IF-CLI-SEC-009",
@@ -373,9 +361,7 @@
       "impact": "Possible ANSI/log injection via crafted file names.",
       "recommendation": "Escape or strip control characters before terminal output.",
       "owner": "CLI Security",
-      "verification": [
-        "Log-safety test with crafted filename containing escape sequences"
-      ]
+      "verification": ["Log-safety test with crafted filename containing escape sequences"]
     },
     {
       "id": "IF-CLI-SEC-010",
@@ -394,9 +380,7 @@
       "impact": "Large files can increase memory pressure and destabilize runs.",
       "recommendation": "Use streaming hash computation and enforce max file size controls.",
       "owner": "CLI Core",
-      "verification": [
-        "Large-file stress test"
-      ]
+      "verification": ["Large-file stress test"]
     },
     {
       "id": "IF-CLI-BENCH-011",
@@ -494,9 +478,7 @@
       "impact": "Regressions can merge without explicit override decision.",
       "recommendation": "Introduce optional strict mode for release/hardening contexts.",
       "owner": "CLI Benchmark",
-      "verification": [
-        "Workflow strict-mode simulation with induced regression"
-      ]
+      "verification": ["Workflow strict-mode simulation with induced regression"]
     },
     {
       "id": "IF-CLI-SEC-014",
@@ -567,9 +549,7 @@
       "impact": "Behavioral drift risk on future edits.",
       "recommendation": "Centralize common guards/constants.",
       "owner": "CLI Core",
-      "verification": [
-        "pnpm run typecheck && pnpm test after extraction"
-      ]
+      "verification": ["pnpm run typecheck && pnpm test after extraction"]
     },
     {
       "id": "IF-CLI-MAINT-016",
@@ -593,9 +573,7 @@
       "impact": "Release automation state clarity improved.",
       "recommendation": "Keep release metadata contract under CI validation.",
       "owner": "CLI Release",
-      "verification": [
-        "Release Please workflow run/dry-run"
-      ]
+      "verification": ["Release Please workflow run/dry-run"]
     },
     {
       "id": "IF-SITE-PROD-017",
@@ -619,10 +597,7 @@
       "impact": "Claim traceability and credibility improved.",
       "recommendation": "Maintain sync cadence and stale snapshot alerting.",
       "owner": "Site Product + Benchmark",
-      "verification": [
-        "pnpm run benchmark:test",
-        "Render /benchmarks/latest"
-      ]
+      "verification": ["pnpm run benchmark:test", "Render /benchmarks/latest"]
     },
     {
       "id": "IF-SITE-PROD-018",
@@ -651,9 +626,7 @@
       "impact": "Prior analytics gap is closed.",
       "recommendation": "Add event-level validation when custom events are enabled.",
       "owner": "Site Growth",
-      "verification": [
-        "Manual ?analytics=off/on validation in browser"
-      ]
+      "verification": ["Manual ?analytics=off/on validation in browser"]
     },
     {
       "id": "IF-SITE-MAINT-019",
@@ -677,9 +650,7 @@
       "impact": "Unnecessary runtime dependency surface and audit scope expansion.",
       "recommendation": "Move googleapis to devDependencies.",
       "owner": "Site Platform",
-      "verification": [
-        "pnpm install/build/seo:test after dependency move"
-      ]
+      "verification": ["pnpm install/build/seo:test after dependency move"]
     },
     {
       "id": "IF-SITE-PROD-020",
@@ -703,9 +674,7 @@
       "impact": "Risk of stale external pricing claims over time.",
       "recommendation": "Automate stale-claim detection with a blocking freshness threshold.",
       "owner": "Site Product + Growth",
-      "verification": [
-        "Scheduled freshness check in CI/governance workflow"
-      ]
+      "verification": ["Scheduled freshness check in CI/governance workflow"]
     },
     {
       "id": "IF-SITE-TEST-021",
@@ -778,9 +747,7 @@
       "impact": "Core safety controls are now continuously verifiable.",
       "recommendation": "Keep strict gates for safety and advisory scoring for style density.",
       "owner": "Site UX",
-      "verification": [
-        "pnpm run animation:check"
-      ]
+      "verification": ["pnpm run animation:check"]
     },
     {
       "id": "IF-SITE-SEO-023",
@@ -809,9 +776,7 @@
       "impact": "Signal-to-noise degradation in SEO checks can mask true issues.",
       "recommendation": "Evaluate H1 per route render output, not source-text global count.",
       "owner": "Site SEO",
-      "verification": [
-        "pnpm run seo:check after rule update"
-      ]
+      "verification": ["pnpm run seo:check after rule update"]
     },
     {
       "id": "IF-SITE-SEO-024",
@@ -835,9 +800,7 @@
       "impact": "Advisory output contains expected env-noise unrelated to production metadata.",
       "recommendation": "Skip/adjust public-metadata check when placeholder domain is in use.",
       "owner": "Site SEO",
-      "verification": [
-        "pnpm run check:ci with placeholder-aware SEO mode"
-      ]
+      "verification": ["pnpm run check:ci with placeholder-aware SEO mode"]
     },
     {
       "id": "IF-SITE-SEC-025",
@@ -856,9 +819,7 @@
       "impact": "Missed defense-in-depth opportunity for browser-side protections.",
       "recommendation": "Add baseline security headers and validate compatibility.",
       "owner": "Site Security",
-      "verification": [
-        "Header scan on preview deployment"
-      ]
+      "verification": ["Header scan on preview deployment"]
     },
     {
       "id": "IF-SITE-MAINT-026",
@@ -882,9 +843,7 @@
       "impact": "Limits long-tail discoverability and direct feedback capture.",
       "recommendation": "Add lightweight first-party docs and feedback entrypoint.",
       "owner": "Site Product + Growth",
-      "verification": [
-        "Route smoke tests for new docs/feedback paths"
-      ]
+      "verification": ["Route smoke tests for new docs/feedback paths"]
     },
     {
       "id": "IF-SITE-SEC-027",
@@ -913,9 +872,7 @@
       "impact": "Inconsistent supply-chain risk control and update governance.",
       "recommendation": "Adopt one pinning policy and enforce it automatically.",
       "owner": "Site Platform + Security",
-      "verification": [
-        "Workflow policy lint in CI"
-      ]
+      "verification": ["Workflow policy lint in CI"]
     },
     {
       "id": "IF-X-VAL-028",
@@ -939,9 +896,7 @@
       "impact": "Red gate adds noise to release readiness and local CI parity.",
       "recommendation": "Normalize formatting baseline or scope gate exclusions for archival docs.",
       "owner": "CLI Maintainers",
-      "verification": [
-        "pnpm run check exits 0"
-      ]
+      "verification": ["pnpm run check exits 0"]
     },
     {
       "id": "IF-X-VAL-029",
@@ -960,9 +915,7 @@
       "impact": "Security scan reliability gap when audit service is unavailable.",
       "recommendation": "Add retry/backoff policy and fallback scanner path in CI.",
       "owner": "Site Platform",
-      "verification": [
-        "pnpm audit with fallback path validation"
-      ]
+      "verification": ["pnpm audit with fallback path validation"]
     },
     {
       "id": "IF-X-SEC-030",
@@ -991,9 +944,7 @@
       "impact": "Inconsistent security posture and governance overhead across repos.",
       "recommendation": "Define org-level policy and enforce via automated workflow checks.",
       "owner": "Platform/SecOps",
-      "verification": [
-        "Cross-repo workflow policy audit"
-      ]
+      "verification": ["Cross-repo workflow policy audit"]
     },
     {
       "id": "IF-X-DX-031",
@@ -1017,9 +968,7 @@
       "impact": "Improved CI/debug feedback compared with prior audit baseline.",
       "recommendation": "Maintain this behavior and preserve parity in JSON mode metadata.",
       "owner": "CLI Product",
-      "verification": [
-        "imageforge <dir> --check output inspection"
-      ]
+      "verification": ["imageforge <dir> --check output inspection"]
     },
     {
       "id": "IF-X-TEST-032",

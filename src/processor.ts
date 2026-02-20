@@ -44,6 +44,7 @@ export interface DiscoveryWarning {
 
 const LIMIT_INPUT_PIXELS = 100_000_000;
 const IGNORED_DIRS = new Set([".git", "node_modules", ".next", "dist", "build", ".turbo"]);
+const HASH_CHUNK_SIZE = 1024 * 1024;
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".tiff", ".tif"]);
 
@@ -110,8 +111,21 @@ export function discoverImages(
 }
 
 export function fileHash(filePath: string, options?: ProcessOptions): string {
-  const content = fs.readFileSync(filePath);
-  const hash = crypto.createHash("sha256").update(content);
+  const hash = crypto.createHash("sha256");
+  const fileDescriptor = fs.openSync(filePath, "r");
+  const buffer = Buffer.allocUnsafe(HASH_CHUNK_SIZE);
+
+  try {
+    for (;;) {
+      const bytesRead = fs.readSync(fileDescriptor, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) {
+        break;
+      }
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    fs.closeSync(fileDescriptor);
+  }
 
   if (options) {
     const normalizedWidths =

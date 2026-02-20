@@ -143,6 +143,33 @@ const CACHE_LOCK_MAX_POLL_MS = 500;
 const CACHE_LOCK_BACKOFF_FACTOR = 1.5;
 const LIMIT_INPUT_PIXELS = 100_000_000;
 
+function sanitizeForTerminal(value: string): string {
+  let sanitized = "";
+  for (const char of value) {
+    if (char === "\n") {
+      sanitized += "\\n";
+      continue;
+    }
+    if (char === "\r") {
+      sanitized += "\\r";
+      continue;
+    }
+    if (char === "\t") {
+      sanitized += "\\t";
+      continue;
+    }
+
+    const code = char.charCodeAt(0);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) {
+      sanitized += `\\x${code.toString(16).padStart(2, "0")}`;
+      continue;
+    }
+
+    sanitized += char;
+  }
+  return sanitized;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -509,7 +536,7 @@ async function preflightCollisions(
         return {
           message: "Failed preflight width planning:",
           details: [
-            `  • ${item.relativePath}`,
+            `  • ${sanitizeForTerminal(item.relativePath)}`,
             `  • ${message}`,
             "Fix: verify source image is readable and valid before rerunning.",
           ],
@@ -534,8 +561,10 @@ async function preflightCollisions(
           return {
             message: "Output collision detected:",
             details: [
-              `  • ${existingSource.source} -> ${existingSource.outputPath}`,
-              `  • ${item.relativePath} -> ${outputPath}`,
+              `  • ${sanitizeForTerminal(existingSource.source)} -> ${sanitizeForTerminal(
+                existingSource.outputPath
+              )}`,
+              `  • ${sanitizeForTerminal(item.relativePath)} -> ${sanitizeForTerminal(outputPath)}`,
               "Fix: rename one source file or change --out-dir.",
             ],
           };
@@ -554,7 +583,7 @@ async function preflightCollisions(
           return {
             message: "Output path already exists and --no-cache is enabled:",
             details: [
-              `  • ${item.relativePath} -> ${outputPath}`,
+              `  • ${sanitizeForTerminal(item.relativePath)} -> ${sanitizeForTerminal(outputPath)}`,
               "Fix: remove existing outputs or rerun with --force-overwrite.",
             ],
           };
@@ -565,7 +594,7 @@ async function preflightCollisions(
           return {
             message: "Output path already exists and is not cache-owned:",
             details: [
-              `  • ${item.relativePath} -> ${outputPath}`,
+              `  • ${sanitizeForTerminal(item.relativePath)} -> ${sanitizeForTerminal(outputPath)}`,
               "Fix: remove or rename the existing output, or use --out-dir.",
             ],
           };
@@ -575,8 +604,8 @@ async function preflightCollisions(
           return {
             message: "Output path already exists and is owned by a different cached source:",
             details: [
-              `  • ${owner.source} -> ${owner.outputPath}`,
-              `  • ${item.relativePath} -> ${outputPath}`,
+              `  • ${sanitizeForTerminal(owner.source)} -> ${sanitizeForTerminal(owner.outputPath)}`,
+              `  • ${sanitizeForTerminal(item.relativePath)} -> ${sanitizeForTerminal(outputPath)}`,
               "Fix: rename the source file, remove conflicting output, or use --out-dir.",
             ],
           };
@@ -761,13 +790,13 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     report.summary.total = images.length;
 
     for (const warning of discoveryWarnings) {
-      const warningMessage = `Skipping "${warning.path}" during discovery: ${warning.message}`;
+      const warningMessage = `Skipping "${sanitizeForTerminal(warning.path)}" during discovery: ${sanitizeForTerminal(warning.message)}`;
       addError(report, "DISCOVERY_WARNING", warningMessage, warning.path);
       printError(chalk.yellow(`Warning: ${warningMessage}`));
     }
 
     if (images.length === 0) {
-      printInfo(chalk.yellow(`No images found in ${inputDir}`));
+      printInfo(chalk.yellow(`No images found in ${sanitizeForTerminal(inputDir)}`));
       report.summary.durationMs = Date.now() - startTime;
       return { exitCode: 0, report, manifest: null };
     }
@@ -775,7 +804,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     if (!options.json) {
       printInfo(chalk.bold(`\nimageforge v${options.version}\n`));
       printInfo(
-        `Processing ${chalk.cyan(images.length.toString())} images in ${chalk.dim(inputDir)}`
+        `Processing ${chalk.cyan(images.length.toString())} images in ${chalk.dim(sanitizeForTerminal(inputDir))}`
       );
       printInfo(
         `Formats: ${options.formats.map((f) => chalk.cyan(f)).join(", ")}  Quality: ${chalk.cyan(options.quality.toString())}  Blur: ${options.blur ? chalk.green("yes") : chalk.dim("no")}`
@@ -789,14 +818,14 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         );
       }
       printInfo(
-        `Output root: ${chalk.dim(outputDir)}  Cache: ${options.useCache ? chalk.green("enabled") : chalk.dim("disabled")}`
+        `Output root: ${chalk.dim(sanitizeForTerminal(outputDir))}  Cache: ${options.useCache ? chalk.green("enabled") : chalk.dim("disabled")}`
       );
       printInfo(`Concurrency: ${chalk.cyan(options.concurrency.toString())}\n`);
     }
 
     if (options.verbose && !options.json) {
-      printInfo(chalk.dim(`Cache file: ${cachePath}`));
-      printInfo(chalk.dim(`Manifest output: ${outputPath}`));
+      printInfo(chalk.dim(`Cache file: ${sanitizeForTerminal(cachePath)}`));
+      printInfo(chalk.dim(`Manifest output: ${sanitizeForTerminal(outputPath)}`));
       printInfo(chalk.dim(`Check mode: ${options.checkMode ? "yes" : "no"}`));
     }
 
@@ -878,10 +907,11 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     }
 
     function logOutcome(progress: string, outcome: WorkOutcome) {
+      const safeRelativePath = sanitizeForTerminal(outcome.item.relativePath);
       if (outcome.kind === "cached") {
         if (!options.quiet) {
           printPerFile(
-            `  ${chalk.dim(progress)} ${chalk.dim("○")} ${chalk.dim(outcome.item.relativePath)} ${chalk.dim("(cached)")}`
+            `  ${chalk.dim(progress)} ${chalk.dim("○")} ${chalk.dim(safeRelativePath)} ${chalk.dim("(cached)")}`
           );
         }
         if (options.verbose && !options.json) {
@@ -893,15 +923,16 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       if (outcome.kind === "needs-processing") {
         if (!options.quiet) {
           printPerFile(
-            `  ${chalk.dim(progress)} ${chalk.red("✗")} ${outcome.item.relativePath} ${chalk.red("(needs processing)")}`
+            `  ${chalk.dim(progress)} ${chalk.red("✗")} ${safeRelativePath} ${chalk.red("(needs processing)")}`
           );
         }
         return;
       }
 
       if (outcome.kind === "failed") {
+        const safeMessage = sanitizeForTerminal(outcome.message);
         printPerFile(
-          `  ${chalk.dim(progress)} ${chalk.red("✗")} ${outcome.item.relativePath} — ${chalk.red(outcome.message)}`,
+          `  ${chalk.dim(progress)} ${chalk.red("✗")} ${safeRelativePath} — ${chalk.red(safeMessage)}`,
           true
         );
         return;
@@ -910,7 +941,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       if (!options.quiet) {
         const outputSummary = formatOutputSummary(outcome.result);
         printPerFile(
-          `  ${chalk.dim(progress)} ${chalk.green("✓")} ${outcome.item.relativePath} → ${outputSummary}`
+          `  ${chalk.dim(progress)} ${chalk.green("✓")} ${safeRelativePath} → ${outputSummary}`
         );
       }
       if (options.verbose && !options.json) {

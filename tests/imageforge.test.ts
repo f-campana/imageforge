@@ -394,6 +394,22 @@ describe("fileHash", () => {
 
     fs.rmSync(copy, { force: true });
   });
+
+  it("hashes large files correctly with chunked reads", () => {
+    const largeFile = path.join(FIXTURES, "large-hash.bin");
+    fs.writeFileSync(largeFile, crypto.randomBytes(6 * 1024 * 1024));
+
+    try {
+      const expected = crypto
+        .createHash("sha256")
+        .update(fs.readFileSync(largeFile))
+        .digest("hex")
+        .slice(0, 16);
+      expect(fileHash(largeFile)).toBe(expected);
+    } finally {
+      fs.rmSync(largeFile, { force: true });
+    }
+  });
 });
 
 describe("generateBlurDataURL", () => {
@@ -1334,6 +1350,26 @@ describe("CLI integration", () => {
     expect(result.stdout).toContain("--widths 120,240");
     expect(result.stdout).toContain("--concurrency 3");
     expect(result.stdout).toContain("--out-dir");
+  });
+
+  it("--check sanitizes control characters in logged file paths", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const dir = path.join(cliDir, "check-control-chars");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+
+    const rawName = `ansi-\u001b[31m-red.jpg`;
+    await createJpeg(path.join(dir, rawName), 30, 30, { r: 120, g: 20, b: 20 });
+
+    const manifest = path.join(OUTPUT, "check-control-chars.json");
+    const result = runCli([dir, "--check", "-o", manifest], ROOT, { FORCE_COLOR: "0" });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("ansi-\\x1b[31m-red.jpg");
+    expect(result.stdout).not.toContain(rawName);
   });
 
   it("supports --json output mode", async () => {

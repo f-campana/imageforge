@@ -754,9 +754,9 @@ exit 1
   });
 });
 
-describe("sync-site benchmark formatting", () => {
-  it("runs prettier normalization before checking git status", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-format-"));
+describe("sync-site benchmark dependency isolation", () => {
+  it("does not invoke pnpm before checking git status", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-no-pnpm-"));
     const binDir = path.join(tempDir, "bin");
     const templateRepoDir = path.join(tempDir, "site-template");
     const opsLogPath = path.join(tempDir, "ops.log");
@@ -813,11 +813,8 @@ exit 0
       pnpmPath,
       `#!/bin/sh
 printf "pnpm %s\\n" "$*" >> "$IMAGEFORGE_TEST_OPS_LOG"
-if [ "$1" = "exec" ] && [ "$2" = "prettier" ] && [ "$3" = "--write" ]; then
-  exit 0
-fi
-echo "unexpected pnpm invocation: $*" >&2
-exit 2
+echo "pnpm should not be invoked by sync-site-benchmark: $*" >&2
+exit 37
 `,
       { encoding: "utf-8", mode: 0o755 }
     );
@@ -859,14 +856,9 @@ exit 2
 
       expect(result.status).toBe(0);
       const operations = fs.readFileSync(opsLogPath, "utf-8");
-      const prettierCommand =
-        "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json";
       const gitStatusCommand = "git status --porcelain";
-      expect(operations).toContain(prettierCommand);
       expect(operations).toContain(gitStatusCommand);
-      expect(operations.indexOf(prettierCommand)).toBeLessThan(
-        operations.indexOf(gitStatusCommand)
-      );
+      expect(operations).not.toContain("pnpm ");
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

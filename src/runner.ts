@@ -2,6 +2,7 @@ import chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
 import pLimit from "p-limit";
+import { compileGlobPatterns, matchesAnyGlob } from "./glob.js";
 import { discoverImages, fileHash, processImage, toPosix } from "./processor.js";
 import type { DiscoveryWarning, ImageResult, OutputFormat, ProcessOptions } from "./processor.js";
 import {
@@ -74,6 +75,9 @@ export interface RunOptions {
   checkMode: boolean;
   outDir: string | null;
   concurrency: number;
+  dryRun: boolean;
+  includePatterns: string[];
+  excludePatterns: string[];
   json: boolean;
   verbose: boolean;
   quiet: boolean;
@@ -114,6 +118,9 @@ export interface RunReport {
     widths: number[] | null;
     cache: boolean;
     forceOverwrite: boolean;
+    dryRun: boolean;
+    include: string[];
+    exclude: string[];
     concurrency: number;
     json: boolean;
     verbose: boolean;
@@ -151,6 +158,9 @@ function createInitialReport(options: RunOptions, outputDir: string, cachePath: 
       widths: options.widths,
       cache: options.useCache,
       forceOverwrite: options.forceOverwrite,
+      dryRun: options.dryRun,
+      include: options.includePatterns,
+      exclude: options.excludePatterns,
       concurrency: options.concurrency,
       json: options.json,
       verbose: options.verbose,
@@ -250,9 +260,20 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     }
 
     const discoveryWarnings: DiscoveryWarning[] = [];
-    const images = discoverImages(inputDir, (warning) => {
+    const discoveredImages = discoverImages(inputDir, (warning) => {
       discoveryWarnings.push(warning);
     });
+    const includeMatchers = compileGlobPatterns(options.includePatterns);
+    const excludeMatchers = compileGlobPatterns(options.excludePatterns);
+    const images = discoveredImages.filter((imagePath) => {
+      const relativePath = toPosix(path.relative(inputDir, imagePath));
+      const included =
+        includeMatchers.length === 0 || matchesAnyGlob(relativePath, includeMatchers);
+      if (!included) return false;
+      const excluded = excludeMatchers.length > 0 && matchesAnyGlob(relativePath, excludeMatchers);
+      return !excluded;
+    });
+    const filteredOutCount = discoveredImages.length - images.length;
     report.summary.total = images.length;
 
     for (const warning of discoveryWarnings) {
@@ -262,7 +283,11 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     }
 
     if (images.length === 0) {
-      printInfo(chalk.yellow(`No images found in ${sanitizeForTerminal(inputDir)}`));
+      const message =
+        filteredOutCount > 0
+          ? `No images matched include/exclude patterns in ${sanitizeForTerminal(inputDir)}`
+          : `No images found in ${sanitizeForTerminal(inputDir)}`;
+      printInfo(chalk.yellow(message));
       report.summary.durationMs = Date.now() - startTime;
       return { exitCode: 0, report, manifest: null };
     }
@@ -286,6 +311,19 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       printInfo(
         `Output root: ${chalk.dim(sanitizeForTerminal(outputDir))}  Cache: ${options.useCache ? chalk.green("enabled") : chalk.dim("disabled")}`
       );
+      if (options.includePatterns.length > 0) {
+        printInfo(
+          `Include: ${options.includePatterns.map((pattern) => chalk.cyan(pattern)).join(", ")}`
+        );
+      }
+      if (options.excludePatterns.length > 0) {
+        printInfo(
+          `Exclude: ${options.excludePatterns.map((pattern) => chalk.cyan(pattern)).join(", ")}`
+        );
+      }
+      if (options.dryRun) {
+        printInfo(chalk.yellow("Dry run: no outputs, manifest, or cache writes will occur."));
+      }
       printInfo(`Concurrency: ${chalk.cyan(options.concurrency.toString())}\n`);
     }
 
@@ -293,6 +331,10 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       printInfo(chalk.dim(`Cache file: ${sanitizeForTerminal(cachePath)}`));
       printInfo(chalk.dim(`Manifest output: ${sanitizeForTerminal(outputPath)}`));
       printInfo(chalk.dim(`Check mode: ${options.checkMode ? "yes" : "no"}`));
+      printInfo(chalk.dim(`Discovered images: ${discoveredImages.length.toString()}`));
+      if (filteredOutCount > 0) {
+        printInfo(chalk.dim(`Filtered out by include/exclude: ${filteredOutCount.toString()}`));
+      }
     }
 
     const cache = options.useCache ? loadCache(cachePath) : new Map<string, CacheEntry>();
@@ -308,7 +350,9 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     });
 
     if (options.useCache) {
-      const sourceKeys = new Set(items.map((item) => item.relativePath));
+      const sourceKeys = new Set(
+        discoveredImages.map((imagePath) => toPosix(path.relative(inputDir, imagePath)))
+      );
       let prunedEntries = 0;
       for (const key of writableCache.keys()) {
         if (!sourceKeys.has(key)) {
@@ -430,6 +474,13 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       }
 
       if (options.checkMode) {
+        return {
+          kind: "needs-processing",
+          item,
+        };
+      }
+
+      if (options.dryRun) {
         return {
           kind: "needs-processing",
           item,
@@ -562,6 +613,35 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
 
       printInfo(chalk.green("\nAll images up to date."));
       return { exitCode: 0, report, manifest: null };
+    }
+
+    if (options.dryRun) {
+      report.rerunCommand = buildRerunCommand(
+        {
+          ...options,
+          outputPath,
+          outDir: options.outDir ? outputDir : null,
+          dryRun: false,
+        },
+        outputDir
+      );
+
+      if (!options.json) {
+        printInfo(
+          chalk.yellow(
+            `\nDry run complete: ${report.summary.needsProcessing.toString()} image(s) would be processed.`
+          )
+        );
+        if (report.rerunCommand) {
+          printInfo(chalk.dim(`Run without --dry-run to apply: ${report.rerunCommand}`));
+        }
+      }
+
+      return {
+        exitCode: report.summary.failed > 0 ? 1 : 0,
+        report,
+        manifest: null,
+      };
     }
 
     if (options.useCache) {

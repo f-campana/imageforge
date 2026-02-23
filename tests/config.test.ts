@@ -288,6 +288,54 @@ describe("config support", () => {
     expect(result.stderr).toContain("imageforge.config.json");
   });
 
+  it("supports include/exclude pattern filters from config", async () => {
+    await createJpeg(path.join(configDir, "include.jpg"), 80, 60, { r: 90, g: 20, b: 20 });
+    await createJpeg(path.join(configDir, "exclude.jpg"), 80, 60, { r: 20, g: 90, b: 20 });
+
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify(
+        {
+          output: "from-filter-config.json",
+          include: ["*.jpg"],
+          exclude: ["exclude.jpg", "cfg.jpg"],
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], configDir);
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(path.join(configDir, "from-filter-config.json"))).toBe(true);
+
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(configDir, "from-filter-config.json"), "utf-8")
+    ) as {
+      images: Record<string, unknown>;
+    };
+
+    expect(Object.keys(manifest.images).sort()).toEqual(["include.jpg"]);
+  });
+
+  it("fails fast on empty include/exclude patterns in config", () => {
+    fs.writeFileSync(
+      configFilePath,
+      JSON.stringify(
+        {
+          include: ["valid.jpg", "   "],
+        },
+        null,
+        2
+      )
+    );
+
+    const result = runCli(["."], configDir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Invalid "include"');
+    expect(result.stderr).toContain("non-empty");
+  });
+
   it("supports explicit --config path", () => {
     const explicitConfig = path.join(configDir, "explicit.json");
     fs.writeFileSync(

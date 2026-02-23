@@ -116,6 +116,9 @@ imageforge <directory> [options]
 | `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                                   |
 | `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                                         |
 | `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                                |
+| `--dry-run` / `--no-dry-run`                 | Preview processing without writing outputs, manifest, or cache                      |
+| `--include <pattern>`                        | Include input-relative glob pattern (repeatable or comma-separated)                 |
+| `--exclude <pattern>`                        | Exclude input-relative glob pattern (repeatable or comma-separated)                 |
 | `--out-dir <path>`                           | Output directory for generated derivatives                                          |
 | `--concurrency <number>`                     | Parallel processing (`1..64`, default: `min(8, availableParallelism)`)              |
 | `--json` / `--no-json`                       | Emit machine-readable JSON report to stdout                                         |
@@ -133,6 +136,8 @@ imageforge <directory> [options]
 - Output collision checks are case-insensitive.
 - Existing outputs are protected unless explicitly overwritten with `--force-overwrite`.
 - With `--check`, ImageForge prints an exact copy-pastable rerun command.
+- `--dry-run` previews which images would be processed but performs no writes.
+- `--check` and `--dry-run` cannot be used together.
 - Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
 - Requested widths are targets; generated effective widths may be smaller for source-bounded runs.
 - Width lists are capped at 16 unique values to bound compute and output fan-out.
@@ -165,6 +170,9 @@ Example `imageforge.config.json`:
   "blurSize": 4,
   "widths": [320, 640, 960, 1280],
   "cache": true,
+  "dryRun": false,
+  "include": ["**/*.jpg", "**/*.png"],
+  "exclude": ["**/legacy/**"],
   "outDir": "public/generated",
   "concurrency": 4
 }

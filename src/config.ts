@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { normalizeGlobPattern } from "./glob.js";
 import { MAX_WIDTH_COUNT, normalizeRequestedWidths } from "./responsive.js";
 
 export interface ImageForgeConfig {
@@ -14,6 +15,9 @@ export interface ImageForgeConfig {
   check?: boolean;
   outDir?: string;
   concurrency?: number;
+  dryRun?: boolean;
+  include?: string | string[];
+  exclude?: string | string[];
   json?: boolean;
   verbose?: boolean;
   quiet?: boolean;
@@ -38,6 +42,9 @@ const ALLOWED_KEYS = new Set([
   "check",
   "outDir",
   "concurrency",
+  "dryRun",
+  "include",
+  "exclude",
   "json",
   "verbose",
   "quiet",
@@ -97,6 +104,38 @@ function parseFormats(value: unknown, sourcePath: string): string | string[] | u
   return value;
 }
 
+function parsePatternList(
+  value: unknown,
+  key: "include" | "exclude",
+  sourcePath: string
+): string[] | undefined {
+  if (value === undefined) return undefined;
+
+  const rawPatterns =
+    typeof value === "string" ? value.split(",") : Array.isArray(value) ? value : null;
+
+  if (rawPatterns === null) {
+    throw new ConfigError(`Invalid "${key}" in ${sourcePath}: expected string or string array.`);
+  }
+
+  if (!rawPatterns.every((entry) => typeof entry === "string")) {
+    throw new ConfigError(`Invalid "${key}" in ${sourcePath}: array must contain only strings.`);
+  }
+
+  const normalized: string[] = [];
+  for (const entry of rawPatterns) {
+    const pattern = normalizeGlobPattern(entry);
+    if (pattern === "") {
+      throw new ConfigError(`Invalid "${key}" in ${sourcePath}: pattern values must be non-empty.`);
+    }
+    if (!normalized.includes(pattern)) {
+      normalized.push(pattern);
+    }
+  }
+
+  return normalized;
+}
+
 function parseWidths(value: unknown, sourcePath: string): number[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) {
@@ -153,6 +192,9 @@ function parseConfig(value: unknown, sourcePath: string): ImageForgeConfig {
     check: parseBoolean(value.check, "check", sourcePath),
     outDir: parseString(value.outDir, "outDir", sourcePath),
     concurrency: parseNumber(value.concurrency, "concurrency", sourcePath),
+    dryRun: parseBoolean(value.dryRun, "dryRun", sourcePath),
+    include: parsePatternList(value.include, "include", sourcePath),
+    exclude: parsePatternList(value.exclude, "exclude", sourcePath),
     json: parseBoolean(value.json, "json", sourcePath),
     verbose: parseBoolean(value.verbose, "verbose", sourcePath),
     quiet: parseBoolean(value.quiet, "quiet", sourcePath),

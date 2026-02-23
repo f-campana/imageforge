@@ -10,6 +10,7 @@
 
 - [ ] `pnpm run check`
 - [ ] `pnpm run build`
+- [ ] `pnpm run test:e2e`
 
 ## Release Notes
 

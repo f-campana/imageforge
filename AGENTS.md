@@ -4,7 +4,8 @@
 
 ImageForge is a TypeScript CLI package (`@imageforge/cli`) that scans image directories, generates optimized `webp`/`avif` derivatives, and writes a manifest (`imageforge.json`) with metadata and `blurDataURL` values.
 
-Primary implementation lives in `src/` and ships as compiled CommonJS output in `dist/`.
+Primary implementation lives in `src/` and ships as dual-module output in `dist/`:
+ESM entrypoints and CommonJS compatibility under `dist/cjs/`.
 
 ## Tech Stack
 
@@ -13,7 +14,7 @@ Primary implementation lives in `src/` and ships as compiled CommonJS output in 
 - Language/build: TypeScript (`tsc`)
 - CLI/runtime libs: `commander`, `chalk`, `sharp`, `p-limit`
 - Quality: ESLint (`typescript-eslint` strict/stylistic), Prettier, Vitest
-- CI/CD: GitHub Actions (`ci.yml`, `release-please.yml`, `publish.yml`)
+- CI/CD: GitHub Actions (`ci.yml`, `release-please.yml`, `publish.yml`, benchmark workflows)
 
 ## Setup and Commands
 

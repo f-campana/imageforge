@@ -28,7 +28,7 @@ Allowed types include: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test
 3. Use a semantic PR title (Conventional Commit format).
 4. Explain behavior changes and edge cases in the PR description.
 5. If release behavior is touched, verify both release and publish workflows still pass.
-6. Commit message lint is enforced during PR validation (`Commit Message Lint (PR only)`), not on direct push runs.
+6. Commit message lint runs during PR validation as informational feedback (`Commit Message Lint (informational)`), and is non-blocking.
 
 ## Releases and Tags
 

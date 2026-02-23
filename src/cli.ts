@@ -7,7 +7,7 @@ import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { ConfigError, loadConfig, type ImageForgeConfig } from "./config.js";
 import { normalizeGlobPattern } from "./glob.js";
-import type { OutputFormat } from "./processor.js";
+import { toPosix, type OutputFormat } from "./processor.js";
 import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive.js";
 import { getDefaultConcurrency, runImageforge } from "./runner.js";
 
@@ -32,6 +32,10 @@ interface CliOptions {
   config?: string;
 }
 
+interface InitCliOptions {
+  force?: boolean;
+}
+
 interface ResolvedOptions {
   output: string;
   formatsInput: string[];
@@ -50,6 +54,18 @@ interface ResolvedOptions {
   json: boolean;
   verbose: boolean;
   quiet: boolean;
+}
+
+function defaultInitConfig(defaultConcurrency: number): ImageForgeConfig {
+  return {
+    output: "imageforge.json",
+    formats: ["webp"],
+    quality: 80,
+    blur: true,
+    blurSize: 4,
+    cache: true,
+    concurrency: defaultConcurrency,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -375,11 +391,38 @@ function resolveOptions(
 
 const program = new Command();
 const packageVersion = readPackageVersion();
+const defaultConcurrency = getDefaultConcurrency();
 
 program
   .name("imageforge")
   .description("Image optimization pipeline for Next.js developers")
-  .version(packageVersion)
+  .version(packageVersion);
+
+program
+  .command("init")
+  .description("Create an imageforge.config.json scaffold in the current directory")
+  .option("--force", "Overwrite imageforge.config.json if it already exists")
+  .option("--no-force", "Do not overwrite an existing config file")
+  .action((options: InitCliOptions) => {
+    try {
+      const configPath = path.resolve(process.cwd(), "imageforge.config.json");
+      if (fs.existsSync(configPath) && !options.force) {
+        throw new Error(
+          `Config file already exists: ${configPath}. Re-run with --force to overwrite.`
+        );
+      }
+
+      const scaffold = defaultInitConfig(defaultConcurrency);
+      fs.writeFileSync(configPath, `${JSON.stringify(scaffold, null, 2)}\n`, "utf-8");
+      console.log(`Created ${toPosix(path.relative(process.cwd(), configPath) || configPath)}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      console.error(chalk.red(`imageforge failed: ${message}`));
+      process.exitCode = 1;
+    }
+  });
+
+program
   .argument("<directory>", "Directory containing images to process")
   .option("-o, --output <path>", "Manifest output path (default: imageforge.json)")
   .option("-f, --formats <formats>", "Output formats (comma-separated: webp,avif)")
@@ -414,7 +457,7 @@ program
   .option("--out-dir <path>", "Output directory for generated derivatives")
   .option(
     "--concurrency <number>",
-    `Number of images to process concurrently (default: ${getDefaultConcurrency().toString()})`
+    `Number of images to process concurrently (default: ${defaultConcurrency.toString()})`
   )
   .option("--json", "Emit machine-readable JSON report to stdout")
   .option("--no-json", "Disable JSON output mode")
@@ -436,7 +479,7 @@ program
         command,
         loadedConfig.config,
         loadedConfig.sourcePath,
-        getDefaultConcurrency()
+        defaultConcurrency
       );
 
       const result = await runImageforge({

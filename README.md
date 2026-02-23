@@ -151,6 +151,18 @@ oversized width lists.
 
 ## Configuration
 
+Scaffold a starter config:
+
+```bash
+imageforge init
+```
+
+Overwrite an existing scaffold:
+
+```bash
+imageforge init --force
+```
+
 Config resolution order:
 
 1. Internal defaults

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawn, spawnSync } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -1074,6 +1075,35 @@ describe("CLI integration", () => {
     const result = runCli(["--version"]);
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe(PACKAGE_VERSION);
+  });
+
+  it("supports `imageforge init` scaffolding with overwrite protection", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-init-"));
+    const configPath = path.join(tempDir, "imageforge.config.json");
+
+    try {
+      const first = runCli(["init"], tempDir);
+      expect(first.status).toBe(0);
+      expect(fs.existsSync(configPath)).toBe(true);
+
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8")) as {
+        output: string;
+        formats: string[];
+        quality: number;
+      };
+      expect(parsed.output).toBe("imageforge.json");
+      expect(parsed.formats).toEqual(["webp"]);
+      expect(parsed.quality).toBe(80);
+
+      const second = runCli(["init"], tempDir);
+      expect(second.status).toBe(1);
+      expect(second.stderr).toContain("already exists");
+
+      const third = runCli(["init", "--force"], tempDir);
+      expect(third.status).toBe(0);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("documents requested width target behavior in --help output", () => {

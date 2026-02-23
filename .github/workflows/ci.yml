@@ -115,6 +115,51 @@ jobs:
       - name: Run packaged install E2E test
         run: pnpm run test:e2e
 
+  coverage-advisory:
+    name: Coverage Advisory (Node 22)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run coverage suite (advisory)
+        id: coverage
+        continue-on-error: true
+        run: pnpm run test:coverage
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: coverage-cli
+          path: coverage
+          if-no-files-found: warn
+
+      - name: Publish advisory status
+        if: steps.coverage.outcome == 'failure'
+        run: |
+          echo "::warning::Coverage advisory failed. See uploaded coverage artifacts for details."
+          {
+            echo "### Coverage Advisory"
+            echo
+            echo "Coverage run failed in advisory mode."
+            echo "This does not block merges in Phase 6A."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   security-audit:
     name: Security Audit (Node 22)
     runs-on: ubuntu-latest

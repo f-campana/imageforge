@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7](https://github.com/f-campana/imageforge/compare/v0.1.6...v0.1.7) (2026-02-23)
+
+
+### Features
+
+* **benchmark:** add benchmark program tooling and CI workflows ([d9e02ad](https://github.com/f-campana/imageforge/commit/d9e02adab86aa9ab3ce32db798d08a884660c02d))
+* **benchmark:** add benchmark program tooling and CI workflows ([68222be](https://github.com/f-campana/imageforge/commit/68222bed626e328dd71f3b50e7e4a29d85903d82))
+* **benchmark:** export and sync site snapshots from benchmark CI ([3d12b12](https://github.com/f-campana/imageforge/commit/3d12b12e55ee44cdcb29bb53e5458101b3442ca6))
+* **cli:** migrate to esm-primary package with stable runner subpath ([#35](https://github.com/f-campana/imageforge/issues/35)) ([6731f2d](https://github.com/f-campana/imageforge/commit/6731f2d1695ed2b82d2400eac32ce7c43813a7e1))
+
+
+### Bug Fixes
+
+* **bench:** harden dataset integrity and sync security ([e6ed9fe](https://github.com/f-campana/imageforge/commit/e6ed9fe3fc0c8209ae77b3a3e3978d6a95e8d4b9))
+* **bench:** harden dataset integrity and sync security ([d4c85c6](https://github.com/f-campana/imageforge/commit/d4c85c672b9073847a60a23240d9c3250d0a2458))
+* **benchmark:** create fallback sources dir in CI workflow ([e3a907a](https://github.com/f-campana/imageforge/commit/e3a907a18a9e54553f2b5a21242264789aefde28))
+* **benchmark:** fetch sync branch before force-with-lease push ([c7c2658](https://github.com/f-campana/imageforge/commit/c7c265826686281437e310db4de35df7d789a95a))
+* **benchmark:** fetch sync branch before force-with-lease push ([201bae8](https://github.com/f-campana/imageforge/commit/201bae87ae9a6639537e264a8f0ded799aa207f2))
+* **benchmark:** use explicit force-with-lease hash for sync push ([00a1584](https://github.com/f-campana/imageforge/commit/00a1584d4d22b06173d210f634f0bcc6652dd7e1))
+* **benchmark:** use explicit force-with-lease hash for sync push ([180ef9e](https://github.com/f-campana/imageforge/commit/180ef9e046e24f6997895570b2497824c562b236))
+* **bench:** normalize site snapshot json before sync ([#38](https://github.com/f-campana/imageforge/issues/38)) ([af81fad](https://github.com/f-campana/imageforge/commit/af81fad48fabe37c9ab3f7fd5c8b1e625199ddfc))
+* **bench:** remove cross-repo prettier dependency in snapshot sync ([#43](https://github.com/f-campana/imageforge/issues/43)) ([1f7f238](https://github.com/f-campana/imageforge/commit/1f7f2386d667143515ee7fc6ef629cf2ae37cd2f))
+* **ci:** pin benchmark publish workflow actions ([#41](https://github.com/f-campana/imageforge/issues/41)) ([c0ecd1a](https://github.com/f-campana/imageforge/commit/c0ecd1af7ee6dd558f9ac34b6f8bb2445f50ca25))
+* **security:** sanitize path logs and stream hashing ([#40](https://github.com/f-campana/imageforge/issues/40)) ([af010b5](https://github.com/f-campana/imageforge/commit/af010b5f5b989e545b31fd4b979845d0a952541d))
+
 ## [0.1.6](https://github.com/f-campana/imageforge/compare/v0.1.5...v0.1.6) (2026-02-13)
 
 

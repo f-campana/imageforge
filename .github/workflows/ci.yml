@@ -217,6 +217,58 @@ jobs:
             echo "This does not block merges in Phase 6A."
           } >> "$GITHUB_STEP_SUMMARY"
 
+  mutation-advisory:
+    name: Mutation Advisory (Node 22)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run mutation pilot (advisory)
+        id: mutation
+        continue-on-error: true
+        run: pnpm run test:mutation:pilot
+
+      - name: Summarize mutation report
+        if: always()
+        run: >
+          node scripts/testing/summarize-mutation-report.mjs
+          --report .tmp/mutation/report.json
+          --out-json .tmp/mutation/summary.json
+
+      - name: Upload mutation artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: mutation-cli
+          path: .tmp/mutation
+          if-no-files-found: warn
+
+      - name: Publish advisory status
+        if: steps.mutation.outcome == 'failure'
+        run: |
+          echo "::warning::Mutation advisory failed. See uploaded mutation artifacts for details."
+          {
+            echo "### Mutation Advisory"
+            echo
+            echo "Mutation pilot failed in advisory mode."
+            echo "This does not block merges in Phase 6D."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   security-audit:
     name: Security Audit (Node 22)
     runs-on: ubuntu-latest

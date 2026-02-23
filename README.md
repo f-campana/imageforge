@@ -316,6 +316,7 @@ Notes:
 
 - `webp` and `avif` source files are currently excluded as inputs.
 - GIF handling is static-only (first frame).
+- Source-input expansion roadmap: `docs/product/source-input-roadmap.md`.
 
 ## CI Mode
 
@@ -352,10 +353,12 @@ pnpm run typecheck
 pnpm run lint
 pnpm run format:check
 pnpm test
+pnpm run test:mutation:pilot
 pnpm run check
 ```
 
 Quality checks run in CI on Node `20`, `22`, and `24`.
+Mutation testing runs as an advisory pilot in CI (non-blocking) and uploads mutation artifacts.
 
 ## Release Workflow
 

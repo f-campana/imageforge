@@ -1,4 +1,6 @@
 dist
 node_modules
+.tmp
+.stryker-tmp
 pnpm-lock.yaml
 CHANGELOG.md

@@ -2,21 +2,133 @@
   "reportDate": "2026-02-23",
   "baselineDate": "2026-02-15",
   "baselineSource": "Prior audit snapshot provided in thread (2026-02-15).",
-  "generatedAt": "2026-02-23T16:09:11Z",
+  "generatedAt": "2026-02-23T20:30:00Z",
   "scope": {
     "imageforge": {
       "path": "/Users/fabiencampana/Documents/ImageForge",
       "branch": "main",
-      "sha": "2f4a1cb7acb4869aa54cc0e32c03320e7b2a5fdc"
+      "sha": "ef65d3a77f4ea10b3fe464d3bd62ce5030403cb4"
     },
     "imageforgeSite": {
       "path": "/Users/fabiencampana/Documents/imageforge-site",
       "branch": "main",
-      "sha": "121cdae8fb1f8a92325dd22b382364f9a0f8b933",
+      "sha": "fcf69945c55dad84e0801fe534f2728b31b766e8",
       "analyzedViaArchiveAt": "/Users/fabiencampana/Documents/imageforge-site"
     }
   },
   "verificationRuns": [
+    {
+      "timestamp": "2026-02-23T20:27:00Z",
+      "repo": "imageforge",
+      "command": "pnpm run test:e2e",
+      "status": "pass",
+      "note": "Packaged-install E2E passed after mutation advisory pilot integration"
+    },
+    {
+      "timestamp": "2026-02-23T20:26:47Z",
+      "repo": "imageforge",
+      "command": "pnpm run check",
+      "status": "pass",
+      "note": "typecheck/lint/format/test gate remained green after mutation advisory additions"
+    },
+    {
+      "timestamp": "2026-02-23T20:26:03Z",
+      "repo": "imageforge",
+      "command": "pnpm run test:mutation:pilot",
+      "status": "pass",
+      "note": "Stryker advisory pilot completed and emitted HTML/JSON mutation artifacts"
+    },
+    {
+      "timestamp": "2026-02-23T19:30:00Z",
+      "repo": "imageforge",
+      "command": "GitHub Actions: CI (PR #63)",
+      "status": "pass",
+      "note": "Required checks green including Mutation Advisory (Node 22) and existing benchmark/quality gates"
+    },
+    {
+      "timestamp": "2026-02-23T19:20:25Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: Animation Safety (PR #43 rerun)",
+      "status": "pass",
+      "note": "Re-run completed successfully after stale queued run; all required checks then green"
+    },
+    {
+      "timestamp": "2026-02-23T19:21:10Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: CI (PR #43)",
+      "status": "pass",
+      "note": "Required checks green for docs/contact IA routes, sitemap updates, and route smoke coverage"
+    },
+    {
+      "timestamp": "2026-02-23T17:04:12Z",
+      "repo": "imageforge",
+      "command": "GitHub Actions: CI (PR #58)",
+      "status": "pass",
+      "note": "Required checks green, benchmark mixed strictness workflow updates validated"
+    },
+    {
+      "timestamp": "2026-02-23T16:59:26Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: CI (PR #42)",
+      "status": "pass",
+      "note": "Required checks green with new pricing-freshness blocking job"
+    },
+    {
+      "timestamp": "2026-02-23T16:54:34Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: CI (PR #41)",
+      "status": "pass",
+      "note": "Required checks green with deterministic SEO CI path + placeholder skip handling"
+    },
+    {
+      "timestamp": "2026-02-23T16:51:04Z",
+      "repo": "imageforge-site",
+      "command": "GitHub Actions: CI (PR #40)",
+      "status": "pass",
+      "note": "Required checks green with render-aware H1 audit updates"
+    },
+    {
+      "timestamp": "2026-02-23T17:03:40Z",
+      "repo": "imageforge",
+      "command": "pnpm test",
+      "status": "pass",
+      "note": "108 tests passed including strict benchmark comparator coverage"
+    },
+    {
+      "timestamp": "2026-02-23T17:04:03Z",
+      "repo": "imageforge",
+      "command": "pnpm run check",
+      "status": "pass",
+      "note": "typecheck/lint/format/test all passed after benchmark gate updates"
+    },
+    {
+      "timestamp": "2026-02-23T17:04:11Z",
+      "repo": "imageforge",
+      "command": "pnpm run test:e2e",
+      "status": "pass",
+      "note": "Packaged install + npx flow passed after benchmark gate updates"
+    },
+    {
+      "timestamp": "2026-02-23T16:58:20Z",
+      "repo": "imageforge-site",
+      "command": "node --test scripts/governance/__tests__/check-pricing-freshness.test.mjs",
+      "status": "pass",
+      "note": "Pricing freshness pass/stale/invalid/missing scenarios passed"
+    },
+    {
+      "timestamp": "2026-02-23T16:58:20Z",
+      "repo": "imageforge-site",
+      "command": "pnpm run governance:pricing:freshness",
+      "status": "pass",
+      "note": "Blocking freshness gate emitted pass report for PRICING_AS_OF age within threshold"
+    },
+    {
+      "timestamp": "2026-02-23T16:58:41Z",
+      "repo": "imageforge-site",
+      "command": "pnpm run check:ci",
+      "status": "pass",
+      "note": "Deterministic SEO CI path passed with placeholder-domain noise control"
+    },
     {
       "timestamp": "2026-02-23T16:09:11Z",
       "repo": "imageforge",
@@ -201,10 +313,10 @@
     }
   ],
   "deltaCounts": {
-    "New": 4,
-    "Changed": 3,
-    "Unchanged": 6,
-    "Resolved": 20
+    "New": 2,
+    "Changed": 2,
+    "Unchanged": 0,
+    "Resolved": 29
   },
   "findings": [
     {
@@ -256,24 +368,34 @@
       "repo": "imageforge",
       "domain": "Runtime Policy",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "Engine policy remains Node >=22.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6C: CLI runtime policy now supports Node >=20 and CI/E2E matrices validate Node 20+ paths.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/package.json",
-          "line": 113,
-          "note": "engines.node >=22"
+          "line": 116,
+          "note": "engines.node set to >=20"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/ci.yml",
+          "line": 63,
+          "note": "quality matrix includes Node 20/22/24"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/ci.yml",
+          "line": 97,
+          "note": "packaged install E2E matrix includes Node 20 and Node 22"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/README.md",
           "line": 55,
-          "note": "runtime requirement in docs"
+          "note": "runtime requirement updated to Node >=20"
         }
       ],
-      "impact": "Compatibility footprint is narrower than necessary for many users.",
-      "recommendation": "Re-evaluate minimum Node support and expand CI matrix if policy changes.",
+      "impact": "Compatibility expanded to Node 20 users while preserving existing CI confidence on newer runtimes.",
+      "recommendation": "Keep Node 20/22/24 quality matrix and Node 20/22 packaged-install E2E coverage as required gates.",
       "owner": "CLI Core",
-      "verification": ["Matrix CI run on 20/22/24 (if policy updated)"]
+      "verification": ["pnpm run check", "pnpm run test:e2e", "GitHub Actions: CI (PR #59)"]
     },
     {
       "id": "IF-CLI-DX-003",
@@ -324,48 +446,83 @@
       "repo": "imageforge",
       "domain": "CLI UX",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "Key DX ergonomics remain missing: dry-run, include/exclude globs, init scaffold.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6C: CLI now supports dry-run previews, include/exclude glob filtering, and imageforge init scaffold generation.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/cli.ts",
-          "line": 340,
-          "note": "current option set"
+          "line": 399,
+          "note": "imageforge init command with overwrite protection"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/src/config.ts",
-          "line": 29,
-          "note": "config keys do not include include/exclude patterns"
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/cli.ts",
+          "line": 440,
+          "note": "dry-run CLI flag"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/cli.ts",
+          "line": 443,
+          "note": "include/exclude CLI flags"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
+          "line": 266,
+          "note": "input-relative include/exclude filtering with exclude precedence"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
+          "line": 618,
+          "note": "dry-run returns before cache/manifest/output writes"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/cli.integration.test.ts",
+          "line": 920,
+          "note": "dry-run and include/exclude integration coverage"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/cli.integration.test.ts",
+          "line": 1080,
+          "note": "init scaffold + force-overwrite coverage"
         }
       ],
-      "impact": "Harder adoption and selective processing in mixed repos.",
-      "recommendation": "Add staged DX enhancements for previewing and filtering work.",
+      "impact": "Developers can now preview work safely, scope processing precisely, and bootstrap config without manual JSON authoring.",
+      "recommendation": "Keep dry-run/include/exclude/init integration tests in required CLI regression coverage.",
       "owner": "CLI Product",
-      "verification": ["CLI integration tests for new flags/commands"]
+      "verification": [
+        "pnpm test",
+        "pnpm run check",
+        "pnpm run test:e2e",
+        "GitHub Actions: CI (PR #60, PR #61)"
+      ]
     },
     {
       "id": "IF-CLI-PROD-005",
       "repo": "imageforge",
       "domain": "Feature Scope",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "Input discovery still excludes webp/avif/svg source files.",
+      "deltaStatus": "Changed",
+      "finding": "Runtime input discovery still excludes webp/avif/svg, but Phase 6C added an explicit source-input roadmap documenting rationale and sequencing.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/processor.ts",
           "line": 48,
-          "note": "IMAGE_EXTENSIONS set"
+          "note": "supported source extension list excludes webp/avif/svg"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/README.md",
-          "line": 275,
-          "note": "documented supported source extensions"
+          "line": 317,
+          "note": "source scope section documents excluded modern formats"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/docs/product/source-input-roadmap.md",
+          "line": 14,
+          "note": "roadmap now captures deferred scope and planned sequencing"
         }
       ],
-      "impact": "Migration friction for teams already using modern source formats.",
-      "recommendation": "Add support or publish explicit roadmap/limitation guidance.",
+      "impact": "Product behavior remains unchanged for modern source inputs, but scope is now explicit for planning and user expectation setting.",
+      "recommendation": "Implement roadmap phases with explicit contracts and tests before enabling webp/avif/svg source processing.",
       "owner": "CLI Product",
-      "verification": ["Discovery and processing tests for any newly supported formats"]
+      "verification": ["Roadmap and README scope review"]
     },
     {
       "id": "IF-CLI-MAINT-006",
@@ -455,19 +612,24 @@
       "repo": "imageforge",
       "domain": "E2E Coverage",
       "severity": "Low",
-      "deltaStatus": "Changed",
-      "finding": "npx execution is now tested, but only after tarball install in a consumer project.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6C: packaged-install E2E now exercises direct one-shot execution via npm exec --package <tarball> imageforge before local install.",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/tests/packaged-install.e2e.test.ts",
-          "line": 74,
-          "note": "npx imageforge tested after npm install tarball"
+          "line": 102,
+          "note": "one-shot npm exec --package flow"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/packaged-install.e2e.test.ts",
+          "line": 120,
+          "note": "one-shot run asserts manifest and derivative outputs"
         }
       ],
-      "impact": "Direct one-shot npx package resolution remains untested.",
-      "recommendation": "Add isolated remote-style npx scenario without pre-install.",
+      "impact": "The previously unverified one-shot package execution path is now covered in regression tests.",
+      "recommendation": "Keep one-shot package execution in packaged-install E2E to guard npm exec behavioral regressions.",
       "owner": "CLI QA",
-      "verification": ["Extended e2e test case for direct package execution"]
+      "verification": ["pnpm run test:e2e", "GitHub Actions: CI (PR #62)"]
     },
     {
       "id": "IF-CLI-SEC-009",
@@ -604,24 +766,48 @@
       "repo": "imageforge",
       "domain": "Benchmark Gating",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "Benchmark regression signaling remains advisory-only.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6B: benchmark regression gating now uses mixed strictness with explicit strict fail-closed paths and auditable override control.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/docs/benchmark/STANDARD.md",
-          "line": 11,
-          "note": "advisory policy"
+          "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/benchmark-ci.yml",
+          "line": 23,
+          "note": "workflow_dispatch exposes allow_regression_override input"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/benchmark-ci.yml",
-          "line": 207,
-          "note": "warnings only"
+          "line": 83,
+          "note": "scheduled runs set compare_mode=strict"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/benchmark-ci.yml",
+          "line": 245,
+          "note": "Enforce benchmark gate fails strict runs on alerts without override"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/scripts/bench/compare-benchmark.mjs",
+          "line": 98,
+          "note": "--mode advisory|strict support with validation"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/scripts/bench/compare-benchmark.mjs",
+          "line": 263,
+          "note": "strict comparator exits nonzero when alerts are present"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/tests/benchmark-tools.test.ts",
+          "line": 269,
+          "note": "strict mode fail/pass behavior covered by tests"
         }
       ],
-      "impact": "Regressions can merge without explicit override decision.",
-      "recommendation": "Introduce optional strict mode for release/hardening contexts.",
+      "impact": "Regression alerts now block strict benchmark contexts unless an explicit override is declared.",
+      "recommendation": "Maintain advisory PR signal with strict schedule/publish gating and keep override usage explicit in workflow history.",
       "owner": "CLI Benchmark",
-      "verification": ["Workflow strict-mode simulation with induced regression"]
+      "verification": [
+        "GitHub Actions: Benchmark CI (PR #58)",
+        "pnpm test (strict comparator scenarios)",
+        "pnpm run check"
+      ]
     },
     {
       "id": "IF-CLI-SEC-014",
@@ -670,29 +856,44 @@
       "repo": "imageforge",
       "domain": "Code Hygiene",
       "severity": "Low",
-      "deltaStatus": "Unchanged",
-      "finding": "Shared helper/constants remain duplicated across modules.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6C: shared runtime guard and pixel-limit constants were centralized in src/shared.ts and consumed by CLI/config/processor/runner modules.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/src/config.ts",
-          "line": 46,
-          "note": "isRecord duplicate"
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/shared.ts",
+          "line": 1,
+          "note": "single source of truth for LIMIT_INPUT_PIXELS + isRecord"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/src/cli.ts",
-          "line": 47,
-          "note": "isRecord duplicate"
+          "line": 13,
+          "note": "isRecord imported from shared helper"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/src/runner.ts",
-          "line": 144,
-          "note": "LIMIT_INPUT_PIXELS duplicate"
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/config.ts",
+          "line": 5,
+          "note": "isRecord imported from shared helper"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/processor.ts",
+          "line": 11,
+          "note": "LIMIT_INPUT_PIXELS imported from shared helper"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/runner/cache.ts",
+          "line": 4,
+          "note": "isRecord imported from shared helper"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/src/runner/preflight.ts",
+          "line": 7,
+          "note": "LIMIT_INPUT_PIXELS imported from shared helper"
         }
       ],
-      "impact": "Behavioral drift risk on future edits.",
-      "recommendation": "Centralize common guards/constants.",
+      "impact": "Duplicate guard/constant drift risk across CLI runtime modules is removed.",
+      "recommendation": "Keep shared runtime guards/constants centralized and resist reintroducing local duplicates.",
       "owner": "CLI Core",
-      "verification": ["pnpm run typecheck && pnpm test after extraction"]
+      "verification": ["pnpm run check", "pnpm run test:e2e"]
     },
     {
       "id": "IF-CLI-MAINT-016",
@@ -805,24 +1006,38 @@
       "repo": "imageforge-site",
       "domain": "Claim Freshness",
       "severity": "Medium",
-      "deltaStatus": "Unchanged",
-      "finding": "Pricing as-of constants are still hardcoded to February 11, 2026.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6B: pricing freshness is now enforced by a blocking CI gate that validates PRICING_AS_OF for presence, parseability, and age threshold.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/constants.ts",
-          "line": 70,
-          "note": "EXAMPLE_TIMESTAMP and PRICING_AS_OF are static"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/governance/check-pricing-freshness.mjs",
+          "line": 43,
+          "note": "deterministic parser extracts PRICING_AS_OF and validates freshness"
         },
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/ComparisonAndCost.tsx",
-          "line": 52,
-          "note": "renders static as-of text"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
+          "line": 126,
+          "note": "required pricing-freshness CI job added"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
+          "line": 152,
+          "note": "CI runs governance:pricing:freshness and uploads machine-readable artifact"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/governance/__tests__/check-pricing-freshness.test.mjs",
+          "line": 69,
+          "note": "stale/invalid/missing scenarios covered by unit tests"
         }
       ],
-      "impact": "Risk of stale external pricing claims over time.",
-      "recommendation": "Automate stale-claim detection with a blocking freshness threshold.",
+      "impact": "Stale pricing claim timestamps are now blocked in CI before merge instead of relying on manual cadence only.",
+      "recommendation": "Keep threshold policy explicit (default 45 days) and review PRICING_AS_OF update cadence during monthly claim governance.",
       "owner": "Site Product + Growth",
-      "verification": ["Scheduled freshness check in CI/governance workflow"]
+      "verification": [
+        "pnpm run governance:pricing:freshness",
+        "node --test scripts/governance/__tests__/check-pricing-freshness.test.mjs",
+        "GitHub Actions: CI (PR #42)"
+      ]
     },
     {
       "id": "IF-SITE-TEST-021",
@@ -902,53 +1117,63 @@
       "repo": "imageforge-site",
       "domain": "SEO Tooling Quality",
       "severity": "Medium",
-      "deltaStatus": "New",
-      "finding": "H1 audit logic overcounts by scanning source files globally, yielding persistent high-noise warnings.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6B: H1 auditing now supports per-route rendered HTML checks via SEO_AUDIT_BASE_URL with explicit source-fallback signaling.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/technical.mjs",
-          "line": 362,
-          "note": "aggregates all app/components source files"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/config.mjs",
+          "line": 25,
+          "note": "SEO_AUDIT_BASE_URL added to config contract with URL validation"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/technical.mjs",
-          "line": 387,
-          "note": "expects global count == 1"
+          "line": 287,
+          "note": "collectRenderedRouteH1Entries fetches route output and counts rendered <h1>"
         },
         {
-          "path": "/tmp/imageforge-audit/site-main-2xX1Hb/.tmp/seo/report.json",
-          "line": 94,
-          "note": "high warning triggered: Expected one H1, found 3"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/technical.mjs",
+          "line": 614,
+          "note": "runTechnicalChecks selects rendered audit path when auditBaseUrl is configured"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/__tests__/technical.test.mjs",
+          "line": 164,
+          "note": "rendered vs source-fallback evidence behavior covered by tests"
         }
       ],
-      "impact": "Signal-to-noise degradation in SEO checks can mask true issues.",
-      "recommendation": "Evaluate H1 per route render output, not source-text global count.",
+      "impact": "H1 audit signal is route-scoped and materially less noisy when render-audit mode is enabled.",
+      "recommendation": "Use SEO_AUDIT_BASE_URL in CI/governance contexts where rendered route output is available and keep fallback evidence explicit.",
       "owner": "Site SEO",
-      "verification": ["pnpm run seo:check after rule update"]
+      "verification": ["pnpm run seo:test", "pnpm run check:ci"]
     },
     {
       "id": "IF-SITE-SEO-024",
       "repo": "imageforge-site",
       "domain": "SEO Signal Noise",
       "severity": "Low",
-      "deltaStatus": "Changed",
-      "finding": "CI-parity checks use example.com and generate predictable off-page metadata warnings.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6B: placeholder domains now skip off-page public checks, and required CI SEO runs deterministic technical/content suites only.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
-          "line": 14,
-          "note": "check:ci sets NEXT_PUBLIC_SITE_URL=https://example.com"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/seo/offpage.mjs",
+          "line": 110,
+          "note": "placeholder URLs explicitly skip public crawlability/metadata checks"
         },
         {
-          "path": "/tmp/imageforge-audit/site-main-2xX1Hb/.tmp/seo/report.json",
-          "line": 182,
-          "note": "offpage.public_metadata_presence warning"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/package.json",
+          "line": 22,
+          "note": "check:ci now runs seo:check:deterministic"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/ci.yml",
+          "line": 265,
+          "note": "CI seo job executes deterministic suite command"
         }
       ],
-      "impact": "Advisory output contains expected env-noise unrelated to production metadata.",
-      "recommendation": "Skip/adjust public-metadata check when placeholder domain is in use.",
+      "impact": "PR/main SEO CI output is deterministic and avoids predictable placeholder-domain off-page warning noise.",
+      "recommendation": "Keep full off-page checks in governance cadence workflows and retain deterministic SEO suites in required CI.",
       "owner": "Site SEO",
-      "verification": ["pnpm run check:ci with placeholder-aware SEO mode"]
+      "verification": ["pnpm run seo:test", "pnpm run check:ci", "GitHub Actions: CI (PR #41)"]
     },
     {
       "id": "IF-SITE-SEC-025",
@@ -984,24 +1209,53 @@
       "repo": "imageforge-site",
       "domain": "Content IA",
       "severity": "Low",
-      "deltaStatus": "Unchanged",
-      "finding": "No first-party docs/blog/contact routes; docs/changelog are external links.",
+      "deltaStatus": "Resolved",
+      "finding": "Resolved in Phase 6C: site now includes first-party /docs and /contact routes, linked from landing surfaces and included in sitemap + E2E coverage.",
       "evidence": [
         {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/app/page.tsx",
-          "line": 35,
-          "note": "single-page composition"
+          "path": "/Users/fabiencampana/Documents/imageforge-site/app/docs/page.tsx",
+          "line": 13,
+          "note": "first-party docs route with route-level H1"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/app/contact/page.tsx",
+          "line": 13,
+          "note": "first-party contact route with route-level H1"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/Hero.tsx",
+          "line": 45,
+          "note": "hero links to /docs and /contact"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/HeaderNav.tsx",
+          "line": 31,
+          "note": "primary nav links to /docs and /contact"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/components/landing/FinalCtaFooter.tsx",
           "line": 25,
-          "note": "docs/changelog link to GitHub"
+          "note": "footer links to docs/contact and runtime text updated to Node >=20"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/app/sitemap.ts",
+          "line": 22,
+          "note": "sitemap includes /docs and /contact"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/imageforge-site/tests/e2e/landing-and-benchmark.smoke.spec.ts",
+          "line": 40,
+          "note": "route smoke test covers docs/contact headings"
         }
       ],
-      "impact": "Limits long-tail discoverability and direct feedback capture.",
-      "recommendation": "Add lightweight first-party docs and feedback entrypoint.",
+      "impact": "First-party documentation and contact discoverability gaps are now closed without relying solely on external GitHub links.",
+      "recommendation": "Keep /docs and /contact as maintained first-party routes and retain route smoke assertions in E2E coverage.",
       "owner": "Site Product + Growth",
-      "verification": ["Route smoke tests for new docs/feedback paths"]
+      "verification": [
+        "pnpm -C /Users/fabiencampana/Documents/imageforge-site run check:ci",
+        "pnpm -C /Users/fabiencampana/Documents/imageforge-site run test:e2e",
+        "GitHub Actions: CI + Animation Safety (PR #43)"
+      ]
     },
     {
       "id": "IF-SITE-SEC-027",
@@ -1166,49 +1420,55 @@
     },
     {
       "id": "IF-X-TEST-032",
-      "repo": "imageforge",
+      "repo": "imageforge + imageforge-site",
       "domain": "Coverage Strategy",
       "severity": "Medium",
       "deltaStatus": "Changed",
-      "finding": "Coverage governance improved in both repos (advisory coverage artifacts + targeted fault-injection pilots), but mutation-grade effectiveness checks are still not in place.",
+      "finding": "Coverage governance now includes advisory coverage artifacts, fault-injection pilots, and a CLI mutation-testing advisory pilot with published artifacts; full closure still requires broader mutation policy/coverage (including site-side mutation signal).",
       "evidence": [
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/ci.yml",
-          "line": 118,
-          "note": "CLI coverage advisory job publishes artifacts"
+          "line": 128,
+          "note": "coverage advisory job retained"
         },
         {
           "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/ci.yml",
-          "line": 163,
-          "note": "CLI fault-injection advisory job publishes artifacts"
+          "line": 173,
+          "note": "fault-injection advisory job retained"
         },
         {
-          "path": "/Users/fabiencampana/Documents/ImageForge/tests/fault-injection.pilot.test.ts",
+          "path": "/Users/fabiencampana/Documents/ImageForge/.github/workflows/ci.yml",
+          "line": 220,
+          "note": "mutation advisory job added"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/stryker.conf.mjs",
           "line": 1,
-          "note": "CLI injected-failure scenarios for benchmark sync critical path"
+          "note": "CLI mutation pilot configuration"
+        },
+        {
+          "path": "/Users/fabiencampana/Documents/ImageForge/scripts/testing/summarize-mutation-report.mjs",
+          "line": 1,
+          "note": "CI mutation summary + machine-readable artifact helper"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/quality-gates.yml",
           "line": 51,
-          "note": "site advisory unit coverage execution and artifact retention"
+          "note": "site coverage advisory remains active"
         },
         {
           "path": "/Users/fabiencampana/Documents/imageforge-site/.github/workflows/quality-gates.yml",
           "line": 60,
-          "note": "site fault-injection advisory execution and artifact retention"
-        },
-        {
-          "path": "/Users/fabiencampana/Documents/imageforge-site/scripts/security/__tests__/audit-prod-deps.test.mjs",
-          "line": 1,
-          "note": "site injected-failure scenarios for deterministic security audit wrapper"
+          "note": "site fault-injection advisory remains active"
         }
       ],
-      "impact": "Regression signal depth is materially stronger, with actionable artifact trails for coverage and failure-injection results in both repos.",
-      "recommendation": "Keep advisory coverage/fault-injection reporting in place and plan a later phase for mutation testing or kill-rate targets on critical modules.",
+      "impact": "Regression signal depth is materially stronger and now includes mutation artifacts on CLI critical paths, but policy remains advisory and incomplete cross-repo.",
+      "recommendation": "Keep mutation advisory pilot running and plan a follow-on phase for mutation thresholds + site-side mutation signal before marking this area fully resolved.",
       "owner": "CLI QA + Site QA",
       "verification": [
-        "GitHub Actions: imageforge CI (Coverage Advisory + Fault Injection Advisory artifacts)",
-        "GitHub Actions: imageforge-site Quality Gates advisory artifacts (coverage + fault-injection output)"
+        "pnpm run test:mutation:pilot",
+        "GitHub Actions: CI (PR #63) mutation advisory artifact upload",
+        "Existing coverage/fault-injection advisory artifacts in both repos"
       ]
     },
     {

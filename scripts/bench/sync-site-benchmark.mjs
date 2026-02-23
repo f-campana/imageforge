@@ -336,6 +336,8 @@ async function main() {
       );
     }
 
+    runChecked("pnpm", ["install", "--frozen-lockfile"], { cwd: cloneDir }, redact);
+
     const localSnapshotPath = path.join(cloneDir, ".tmp", "site-benchmark-snapshot.json");
     writeJson(localSnapshotPath, snapshot);
 

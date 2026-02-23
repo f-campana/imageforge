@@ -755,6 +755,7 @@ exit 1
 });
 
 describe("sync-site benchmark formatting normalization", () => {
+  const installCommand = "pnpm install --frozen-lockfile";
   const formatterCommand =
     "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json";
   const gitStatusCommand = "git status --porcelain";
@@ -809,7 +810,7 @@ exit 0
     fs.chmodSync(gitPath, 0o755);
   };
 
-  it("invokes formatter before checking git status", () => {
+  it("installs dependencies and invokes formatter before checking git status", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-format-order-"));
     const binDir = path.join(tempDir, "bin");
     const templateRepoDir = path.join(tempDir, "site-template");
@@ -865,8 +866,10 @@ exit 0
 
       expect(result.status).toBe(0);
       const operations = fs.readFileSync(opsLogPath, "utf-8");
+      expect(operations).toContain(installCommand);
       expect(operations).toContain(formatterCommand);
       expect(operations).toContain(gitStatusCommand);
+      expect(operations.indexOf(installCommand)).toBeLessThan(operations.indexOf(formatterCommand));
       expect(operations.indexOf(formatterCommand)).toBeLessThan(
         operations.indexOf(gitStatusCommand)
       );
@@ -889,6 +892,11 @@ exit 0
       pnpmPath,
       `#!/bin/sh
 printf "pnpm %s\\n" "$*" >> "$IMAGEFORGE_TEST_OPS_LOG"
+
+if [ "$1" = "install" ]; then
+  exit 0
+fi
+
 echo "formatter failed" >&2
 exit 42
 `,
@@ -932,6 +940,7 @@ exit 42
 
       expect(result.status).toBe(1);
       const operations = fs.readFileSync(opsLogPath, "utf-8");
+      expect(operations).toContain(installCommand);
       expect(operations).toContain(formatterCommand);
       expect(operations).not.toContain(gitStatusCommand);
       expect(`${result.stdout}\n${result.stderr}`).toContain(

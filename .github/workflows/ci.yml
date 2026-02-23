@@ -248,6 +248,7 @@ jobs:
         run: >
           node scripts/testing/summarize-mutation-report.mjs
           --report .tmp/mutation/report.json
+          --baseline .github/mutation-baseline.json
           --out-json .tmp/mutation/summary.json
 
       - name: Upload mutation artifacts

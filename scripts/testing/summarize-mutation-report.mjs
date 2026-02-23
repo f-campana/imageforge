@@ -6,6 +6,7 @@ function parseArgs(argv) {
     report: ".tmp/mutation/report.json",
     summaryFile: process.env.GITHUB_STEP_SUMMARY ?? "",
     outJson: ".tmp/mutation/summary.json",
+    baseline: "",
   };
 
   for (let index = 2; index < argv.length; index += 1) {
@@ -23,6 +24,11 @@ function parseArgs(argv) {
     }
     if (current === "--out-json" && typeof next === "string") {
       args.outJson = next;
+      index += 1;
+      continue;
+    }
+    if (current === "--baseline" && typeof next === "string") {
+      args.baseline = next;
       index += 1;
       continue;
     }
@@ -128,12 +134,80 @@ function summarize(reportPath) {
   };
 }
 
+function readBaseline(baselinePath) {
+  if (!baselinePath || !fs.existsSync(baselinePath)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    const record = /** @type {Record<string, unknown>} */ (parsed);
+    const overall = asNumber(record.overallMutationScore);
+    const detectable = asNumber(record.detectableMutationScore);
+    if (overall === null || detectable === null) {
+      return null;
+    }
+    return {
+      path: baselinePath,
+      overallMutationScore: overall,
+      detectableMutationScore: detectable,
+      updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function toSignedDelta(value) {
+  if (value > 0) return `+${value.toFixed(2)}%`;
+  if (value < 0) return `${value.toFixed(2)}%`;
+  return "0.00%";
+}
+
+function applyTrend(summary, baselinePath) {
+  if (!summary.ok) {
+    return summary;
+  }
+
+  const baseline = readBaseline(baselinePath);
+  if (!baseline) {
+    return {
+      ...summary,
+      trend: {
+        baselineFound: false,
+        baselinePath: baselinePath || null,
+      },
+    };
+  }
+
+  const overallDelta = summary.mutationScore - baseline.overallMutationScore;
+  const detectableDelta = summary.mutationScoreDetectable - baseline.detectableMutationScore;
+
+  return {
+    ...summary,
+    trend: {
+      baselineFound: true,
+      baselinePath: baseline.path,
+      baselineUpdatedAt: baseline.updatedAt,
+      baselineOverallMutationScore: baseline.overallMutationScore,
+      baselineDetectableMutationScore: baseline.detectableMutationScore,
+      overallDelta: Number(overallDelta.toFixed(2)),
+      detectableDelta: Number(detectableDelta.toFixed(2)),
+      overallDeltaLabel: toSignedDelta(overallDelta),
+      detectableDeltaLabel: toSignedDelta(detectableDelta),
+    },
+  };
+}
+
 function buildSummaryMarkdown(result) {
   if (!result.ok) {
     return `### Mutation Advisory\n\n- Status: report unavailable\n- Detail: ${result.reason}\n- Mode: advisory (non-blocking)\n`;
   }
 
-  return [
+  const lines = [
     "### Mutation Advisory",
     "",
     `- Status: ${result.survived > 0 ? "survived mutants detected" : "no survived mutants detected"}`,
@@ -146,7 +220,18 @@ function buildSummaryMarkdown(result) {
     `- Ignored: ${result.ignored}`,
     `- Detectable mutants: ${result.detectable}`,
     `- Total mutants: ${result.total}`,
-  ].join("\n");
+  ];
+
+  if (result.trend?.baselineFound === true) {
+    lines.push(
+      `- Trend vs baseline overall: ${result.trend.overallDeltaLabel}`,
+      `- Trend vs baseline detectable-only: ${result.trend.detectableDeltaLabel}`
+    );
+  } else {
+    lines.push("- Trend: baseline not available");
+  }
+
+  return lines.join("\n");
 }
 
 function writeSummary(summaryFile, markdown) {
@@ -166,7 +251,7 @@ function writeJson(outFile, payload) {
 }
 
 const args = parseArgs(process.argv);
-const summary = summarize(args.report);
+const summary = applyTrend(summarize(args.report), args.baseline);
 const markdown = buildSummaryMarkdown(summary);
 
 console.log(markdown);

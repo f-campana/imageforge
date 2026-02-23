@@ -916,6 +916,78 @@ describe("CLI integration", () => {
     expect(result.stdout).not.toContain(rawName);
   });
 
+  it("supports --dry-run without writing outputs, manifest, or cache", async () => {
+    const dir = path.join(cliDir, "dry-run");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    await createJpeg(path.join(dir, "preview.jpg"), 90, 60, { r: 50, g: 80, b: 110 });
+
+    const outputManifest = path.join(OUTPUT, "dry-run.json");
+    fs.rmSync(outputManifest, { force: true });
+
+    const result = runCli([dir, "--dry-run", "--json", "-o", outputManifest]);
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(path.join(dir, "preview.webp"))).toBe(false);
+    expect(fs.existsSync(path.join(dir, ".imageforge-cache.json"))).toBe(false);
+    expect(fs.existsSync(outputManifest)).toBe(false);
+
+    const report = JSON.parse(result.stdout) as {
+      summary: { needsProcessing: number; processed: number };
+      options: { dryRun: boolean };
+      rerunCommand: string | null;
+    };
+
+    expect(report.options.dryRun).toBe(true);
+    expect(report.summary.processed).toBe(0);
+    expect(report.summary.needsProcessing).toBe(1);
+    expect(report.rerunCommand).toContain("imageforge");
+    expect(report.rerunCommand).not.toContain("--dry-run");
+  });
+
+  it("rejects combining --check with --dry-run", () => {
+    const result = runCli([
+      cliDir,
+      "--check",
+      "--dry-run",
+      "-o",
+      path.join(OUTPUT, "invalid.json"),
+    ]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("--check and --dry-run cannot be used together");
+  });
+
+  it("filters processing with include/exclude globs and applies exclude precedence", async () => {
+    const dir = path.join(cliDir, "include-exclude");
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(path.join(dir, "nested"), { recursive: true });
+
+    await createJpeg(path.join(dir, "a.jpg"), 40, 40, { r: 10, g: 10, b: 10 });
+    await createJpeg(path.join(dir, "b.jpg"), 40, 40, { r: 20, g: 20, b: 20 });
+    await createJpeg(path.join(dir, "nested", "c.jpg"), 40, 40, { r: 30, g: 30, b: 30 });
+
+    const outputManifest = path.join(OUTPUT, "include-exclude.json");
+    const result = runCli([
+      dir,
+      "--include",
+      "**/*.jpg",
+      "--exclude",
+      "**/b.jpg",
+      "--exclude",
+      "**/nested/**",
+      "-o",
+      outputManifest,
+    ]);
+    expect(result.status).toBe(0);
+
+    const manifest = JSON.parse(fs.readFileSync(outputManifest, "utf-8")) as {
+      images: Record<string, unknown>;
+    };
+    expect(Object.keys(manifest.images)).toEqual(["a.jpg"]);
+    expect(fs.existsSync(path.join(dir, "a.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "b.webp"))).toBe(false);
+    expect(fs.existsSync(path.join(dir, "nested", "c.webp"))).toBe(false);
+  });
+
   it("supports --json output mode", async () => {
     const dir = path.join(cliDir, "json-mode");
     fs.rmSync(dir, { recursive: true, force: true });

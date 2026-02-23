@@ -17,6 +17,9 @@ export interface RerunCommandOptions {
   useCache: boolean;
   forceOverwrite: boolean;
   outDir: string | null;
+  dryRun: boolean;
+  includePatterns: string[];
+  excludePatterns: string[];
   concurrency: number;
 }
 
@@ -55,9 +58,20 @@ export function buildRerunCommand(options: RerunCommandOptions, outputDir: strin
   }
   if (!options.useCache) command.push("--no-cache");
   if (options.forceOverwrite) command.push("--force-overwrite");
+  if (options.includePatterns.length > 0) {
+    for (const pattern of options.includePatterns) {
+      command.push("--include", pattern);
+    }
+  }
+  if (options.excludePatterns.length > 0) {
+    for (const pattern of options.excludePatterns) {
+      command.push("--exclude", pattern);
+    }
+  }
   if (options.outDir) {
     command.push("--out-dir", displayPath(outputDir));
   }
+  if (options.dryRun) command.push("--dry-run");
 
   return command.map(shellQuote).join(" ");
 }

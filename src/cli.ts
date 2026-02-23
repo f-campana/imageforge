@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { ConfigError, loadConfig, type ImageForgeConfig } from "./config.js";
+import { normalizeGlobPattern } from "./glob.js";
 import type { OutputFormat } from "./processor.js";
 import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive.js";
 import { getDefaultConcurrency, runImageforge } from "./runner.js";
@@ -22,6 +23,9 @@ interface CliOptions {
   check?: boolean;
   outDir?: string;
   concurrency?: string;
+  dryRun?: boolean;
+  include?: string[];
+  exclude?: string[];
   json?: boolean;
   verbose?: boolean;
   quiet?: boolean;
@@ -40,6 +44,9 @@ interface ResolvedOptions {
   check: boolean;
   outDir: string | null;
   concurrency: number;
+  dryRun: boolean;
+  include: string[];
+  exclude: string[];
   json: boolean;
   verbose: boolean;
   quiet: boolean;
@@ -92,6 +99,27 @@ function parseFormatsInput(value: string | string[]): string[] {
     .flatMap((entry) => entry.split(","))
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function parsePatternInput(value: string | string[]): string[] {
+  const parts = Array.isArray(value) ? value : [value];
+  const normalized: string[] = [];
+  for (const part of parts) {
+    for (const token of part.split(",")) {
+      const pattern = normalizeGlobPattern(token);
+      if (pattern === "") {
+        throw new Error(`Invalid glob pattern: "${token}" is empty.`);
+      }
+      if (!normalized.includes(pattern)) {
+        normalized.push(pattern);
+      }
+    }
+  }
+  return normalized;
+}
+
+function collectPatternOption(value: string, previous: string[]): string[] {
+  return previous.concat(parsePatternInput(value));
 }
 
 function normalizeWidths(widths: number[]): number[] {
@@ -168,6 +196,9 @@ function applyConfig(target: ResolvedOptions, config: ImageForgeConfig) {
   if (config.outDir !== undefined) target.outDir = config.outDir;
   if (config.concurrency !== undefined)
     target.concurrency = parseNumberOption("concurrency", config.concurrency);
+  if (config.dryRun !== undefined) target.dryRun = config.dryRun;
+  if (config.include !== undefined) target.include = parsePatternInput(config.include);
+  if (config.exclude !== undefined) target.exclude = parsePatternInput(config.exclude);
   if (config.json !== undefined) target.json = config.json;
   if (config.verbose !== undefined) target.verbose = config.verbose;
   if (config.quiet !== undefined) target.quiet = config.quiet;
@@ -192,6 +223,9 @@ function resolveOptions(
     check: false,
     outDir: null,
     concurrency: defaultConcurrency,
+    dryRun: false,
+    include: [],
+    exclude: [],
     json: false,
     verbose: false,
     quiet: false,
@@ -234,6 +268,15 @@ function resolveOptions(
   }
   if (command.getOptionValueSource("concurrency") === "cli" && options.concurrency !== undefined) {
     resolved.concurrency = parseIntegerFromString("concurrency", options.concurrency);
+  }
+  if (command.getOptionValueSource("dryRun") === "cli" && options.dryRun !== undefined) {
+    resolved.dryRun = options.dryRun;
+  }
+  if (command.getOptionValueSource("include") === "cli" && options.include !== undefined) {
+    resolved.include = parsePatternInput(options.include);
+  }
+  if (command.getOptionValueSource("exclude") === "cli" && options.exclude !== undefined) {
+    resolved.exclude = parsePatternInput(options.exclude);
   }
   if (command.getOptionValueSource("json") === "cli" && options.json !== undefined) {
     resolved.json = options.json;
@@ -315,6 +358,10 @@ function resolveOptions(
     throw new Error("--verbose and --quiet cannot be used together.");
   }
 
+  if (resolved.check && resolved.dryRun) {
+    throw new Error("--check and --dry-run cannot be used together.");
+  }
+
   const { formats } = normalizeFormats(resolved.formatsInput, resolved.json);
   if (formats.length === 0) {
     throw new Error("No valid formats specified. Use: webp, avif");
@@ -350,6 +397,20 @@ program
   .option("--no-force-overwrite", "Disable overwrite mode")
   .option("--check", "Check mode: exit 1 if unprocessed images exist")
   .option("--no-check", "Disable check mode")
+  .option("--dry-run", "Preview work without writing outputs, manifest, or cache")
+  .option("--no-dry-run", "Disable dry-run mode")
+  .option(
+    "--include <pattern>",
+    "Include input-relative glob pattern (repeatable or comma-separated)",
+    collectPatternOption,
+    []
+  )
+  .option(
+    "--exclude <pattern>",
+    "Exclude input-relative glob pattern (repeatable or comma-separated)",
+    collectPatternOption,
+    []
+  )
   .option("--out-dir <path>", "Output directory for generated derivatives")
   .option(
     "--concurrency <number>",
@@ -394,6 +455,9 @@ program
         checkMode: resolved.check,
         outDir: resolved.outDir,
         concurrency: resolved.concurrency,
+        dryRun: resolved.dryRun,
+        includePatterns: resolved.include,
+        excludePatterns: resolved.exclude,
         json: resolved.json,
         verbose: resolved.verbose,
         quiet: resolved.quiet,

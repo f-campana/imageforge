@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.8](https://github.com/f-campana/imageforge/compare/v0.1.7...v0.1.8) (2026-02-23)
+
+
+### Features
+
+* **benchmark:** add mixed strictness regression gating ([e429426](https://github.com/f-campana/imageforge/commit/e42942661157c0be8a86cfa657ff412b3c75ab6b))
+* **benchmark:** enforce mixed strictness regression gates ([a8f099e](https://github.com/f-campana/imageforge/commit/a8f099ee4674f154c90792d7bd3d7a8ee37a37e7))
+* **cli:** add dry-run and include/exclude glob filters ([e0453f6](https://github.com/f-campana/imageforge/commit/e0453f62fddd313e6148b399fb72157ece973950))
+* **cli:** add dry-run and include/exclude glob filters ([b20a6e9](https://github.com/f-campana/imageforge/commit/b20a6e998b39b97781d0370ac5dd2919b337f94e))
+* **cli:** add init command scaffold ([b32a08b](https://github.com/f-campana/imageforge/commit/b32a08b99cbfcbc21d8eb6cbd0265dd3e65d7ce6))
+* **cli:** add init command scaffold ([73147d4](https://github.com/f-campana/imageforge/commit/73147d44686ca2229807e7fddfd400af6eff8d1a))
+
+
+### Bug Fixes
+
+* **benchmark:** install site deps before sync formatting ([#51](https://github.com/f-campana/imageforge/issues/51)) ([fbb2a06](https://github.com/f-campana/imageforge/commit/fbb2a06f43949303db16b0a09311baaf0588266d))
+* **benchmark:** normalize synced site json before status ([#49](https://github.com/f-campana/imageforge/issues/49)) ([c5c365e](https://github.com/f-campana/imageforge/commit/c5c365ec33acc1a77f67089ba133c60a0f9d58b9))
+
 ## [0.1.7](https://github.com/f-campana/imageforge/compare/v0.1.6...v0.1.7) (2026-02-23)
 
 

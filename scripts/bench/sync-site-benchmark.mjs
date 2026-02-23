@@ -352,6 +352,19 @@ async function main() {
       redact
     );
 
+    runChecked(
+      "pnpm",
+      [
+        "exec",
+        "prettier",
+        "--write",
+        "data/benchmarks/latest.json",
+        "data/benchmarks/history.json",
+      ],
+      { cwd: cloneDir },
+      redact
+    );
+
     const status = runChecked("git", ["status", "--porcelain"], { cwd: cloneDir }, redact);
     if (status.stdout.trim().length === 0) {
       console.log("No site changes detected; skipping commit and PR update.");

@@ -754,15 +754,13 @@ exit 1
   });
 });
 
-describe("sync-site benchmark dependency isolation", () => {
-  it("does not invoke pnpm before checking git status", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-no-pnpm-"));
-    const binDir = path.join(tempDir, "bin");
-    const templateRepoDir = path.join(tempDir, "site-template");
-    const opsLogPath = path.join(tempDir, "ops.log");
-    fs.mkdirSync(binDir, { recursive: true });
-    fs.mkdirSync(path.join(templateRepoDir, "scripts", "benchmark"), { recursive: true });
+describe("sync-site benchmark formatting normalization", () => {
+  const formatterCommand =
+    "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json";
+  const gitStatusCommand = "git status --porcelain";
 
+  const writeTemplateRepo = (templateRepoDir: string): void => {
+    fs.mkdirSync(path.join(templateRepoDir, "scripts", "benchmark"), { recursive: true });
     fs.writeFileSync(
       path.join(templateRepoDir, "scripts", "benchmark", "upsert-snapshot.mjs"),
       `#!/usr/bin/env node
@@ -777,7 +775,9 @@ fs.writeFileSync(historyPath, '{"items":[{"snapshotId":"raw"}]}', "utf-8");
 `,
       "utf-8"
     );
+  };
 
+  const writeGitStub = (binDir: string): void => {
     const gitPath = path.join(binDir, "git");
     fs.writeFileSync(
       gitPath,
@@ -807,14 +807,23 @@ exit 0
       { encoding: "utf-8", mode: 0o755 }
     );
     fs.chmodSync(gitPath, 0o755);
+  };
+
+  it("invokes formatter before checking git status", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-format-order-"));
+    const binDir = path.join(tempDir, "bin");
+    const templateRepoDir = path.join(tempDir, "site-template");
+    const opsLogPath = path.join(tempDir, "ops.log");
+    fs.mkdirSync(binDir, { recursive: true });
+    writeTemplateRepo(templateRepoDir);
+    writeGitStub(binDir);
 
     const pnpmPath = path.join(binDir, "pnpm");
     fs.writeFileSync(
       pnpmPath,
       `#!/bin/sh
 printf "pnpm %s\\n" "$*" >> "$IMAGEFORGE_TEST_OPS_LOG"
-echo "pnpm should not be invoked by sync-site-benchmark: $*" >&2
-exit 37
+exit 0
 `,
       { encoding: "utf-8", mode: 0o755 }
     );
@@ -856,9 +865,78 @@ exit 37
 
       expect(result.status).toBe(0);
       const operations = fs.readFileSync(opsLogPath, "utf-8");
-      const gitStatusCommand = "git status --porcelain";
+      expect(operations).toContain(formatterCommand);
       expect(operations).toContain(gitStatusCommand);
-      expect(operations).not.toContain("pnpm ");
+      expect(operations.indexOf(formatterCommand)).toBeLessThan(
+        operations.indexOf(gitStatusCommand)
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails before git status when formatter exits nonzero", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-sync-format-failure-"));
+    const binDir = path.join(tempDir, "bin");
+    const templateRepoDir = path.join(tempDir, "site-template");
+    const opsLogPath = path.join(tempDir, "ops.log");
+    fs.mkdirSync(binDir, { recursive: true });
+    writeTemplateRepo(templateRepoDir);
+    writeGitStub(binDir);
+
+    const pnpmPath = path.join(binDir, "pnpm");
+    fs.writeFileSync(
+      pnpmPath,
+      `#!/bin/sh
+printf "pnpm %s\\n" "$*" >> "$IMAGEFORGE_TEST_OPS_LOG"
+echo "formatter failed" >&2
+exit 42
+`,
+      { encoding: "utf-8", mode: 0o755 }
+    );
+    fs.chmodSync(pnpmPath, 0o755);
+
+    const snapshotPath = path.join(tempDir, "snapshot.json");
+    const workspace = path.join(tempDir, "workspace");
+    writeJson(snapshotPath, makeSiteSnapshot());
+
+    try {
+      const result = spawnSync(
+        "node",
+        [
+          SYNC_SITE_BENCHMARK,
+          "--snapshot",
+          snapshotPath,
+          "--site-repo",
+          "f-campana/imageforge-site",
+          "--site-default-branch",
+          "main",
+          "--site-branch",
+          "codex/benchmark-sync-nightly",
+          "--workspace",
+          workspace,
+          "--token-env",
+          "TEST_SYNC_TOKEN",
+        ],
+        {
+          encoding: "utf-8",
+          env: {
+            ...process.env,
+            TEST_SYNC_TOKEN: "sync-format-token",
+            IMAGEFORGE_TEST_OPS_LOG: opsLogPath,
+            IMAGEFORGE_TEST_SITE_TEMPLATE: templateRepoDir,
+            PATH: `${binDir}:${process.env.PATH ?? ""}`,
+          },
+        }
+      );
+
+      expect(result.status).toBe(1);
+      const operations = fs.readFileSync(opsLogPath, "utf-8");
+      expect(operations).toContain(formatterCommand);
+      expect(operations).not.toContain(gitStatusCommand);
+      expect(`${result.stdout}\n${result.stderr}`).toContain(
+        "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json failed"
+      );
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

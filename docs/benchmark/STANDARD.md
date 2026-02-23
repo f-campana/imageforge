@@ -4,12 +4,16 @@
 
 This standard defines CI-native benchmark requirements for ImageForge CLI performance and claim governance.
 
-## Phase 1 Baseline
+## Gate Policy
 
 - Runner: `ubuntu-24.04`
 - Node: `22`
-- Policy: advisory (non-blocking)
+- Policy: mixed strictness
+  - `pull_request`: advisory (non-blocking)
+  - `schedule` on `main`: strict (fail-closed on alerts)
+  - `workflow_dispatch` with `publish_site_snapshot=true`: strict unless `allow_regression_override=true`
 - Comparison model: `head` vs `main` in the same workflow run
+- Comparator mode flag: `--mode advisory|strict` (default `advisory`)
 
 ## Profiles
 
@@ -64,7 +68,7 @@ Each run must satisfy:
 - cold: `processed === total`, `cached === 0`
 - warm: `cached === total`, `processed === 0`
 
-## Advisory Regression Thresholds
+## Regression Thresholds
 
 - warm p50: `+10%`
 - cold wall duration: `+15%`

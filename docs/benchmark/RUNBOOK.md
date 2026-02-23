@@ -31,9 +31,21 @@ pnpm run bench:dataset:fetch -- \
 node scripts/bench/compare-benchmark.mjs \
   --base-summary /path/to/base-summary.json \
   --head-summary /path/to/head-summary.json \
+  --mode advisory \
   --out-json /path/to/compare.json \
   --out-md /path/to/compare.md
 ```
+
+Use `--mode strict` to fail closed when regression alerts are present.
+
+## CI Gate Modes
+
+`benchmark-ci.yml` applies compare modes by event:
+
+1. `pull_request`: `advisory`
+2. `schedule` on `main`: `strict`
+3. `workflow_dispatch` + `publish_site_snapshot=true`: `strict`
+   - set `allow_regression_override=true` only for explicit waiver runs
 
 ## Export Site Snapshot (local)
 

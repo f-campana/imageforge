@@ -252,14 +252,93 @@ describe("benchmark compare script", () => {
     expect(result.status).toBe(0);
 
     const compare = JSON.parse(fs.readFileSync(outPath, "utf-8")) as {
+      advisory: boolean;
+      gateMode: string;
       summary: { alertCount: number };
       pairs: { alerts: { metric: string }[] }[];
     };
 
+    expect(compare.advisory).toBe(true);
+    expect(compare.gateMode).toBe("advisory");
     expect(compare.summary.alertCount).toBeGreaterThan(0);
     expect(compare.pairs[0]?.alerts.map((alert) => alert.metric)).toContain("warm-p50");
     expect(compare.pairs[0]?.alerts.map((alert) => alert.metric)).toContain("warm-p95");
     expect(compare.pairs[0]?.alerts.map((alert) => alert.metric)).toContain("cold");
+  });
+
+  it("fails in strict mode when alerts are present", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-bench-test-"));
+    const basePath = path.join(tempDir, "base-summary.json");
+    const headPath = path.join(tempDir, "head-summary.json");
+    const outPath = path.join(tempDir, "compare.json");
+
+    writeJson(basePath, makeSummary({ cold: 1000, warmP50: 200, warmP95: 240 }));
+    writeJson(headPath, makeSummary({ cold: 1250, warmP50: 230, warmP95: 310 }));
+
+    const result = spawnSync(
+      "node",
+      [
+        COMPARE,
+        "--base-summary",
+        basePath,
+        "--head-summary",
+        headPath,
+        "--out-json",
+        outPath,
+        "--mode",
+        "strict",
+      ],
+      { encoding: "utf-8" }
+    );
+
+    expect(result.status).toBe(1);
+
+    const compare = JSON.parse(fs.readFileSync(outPath, "utf-8")) as {
+      advisory: boolean;
+      gateMode: string;
+      summary: { alertCount: number };
+    };
+    expect(compare.advisory).toBe(false);
+    expect(compare.gateMode).toBe("strict");
+    expect(compare.summary.alertCount).toBeGreaterThan(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("Benchmark strict mode failed");
+  });
+
+  it("passes in strict mode when no alerts are present", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-bench-test-"));
+    const basePath = path.join(tempDir, "base-summary.json");
+    const headPath = path.join(tempDir, "head-summary.json");
+    const outPath = path.join(tempDir, "compare.json");
+
+    writeJson(basePath, makeSummary({ cold: 1000, warmP50: 200, warmP95: 230 }));
+    writeJson(headPath, makeSummary({ cold: 995, warmP50: 198, warmP95: 229 }));
+
+    const result = spawnSync(
+      "node",
+      [
+        COMPARE,
+        "--base-summary",
+        basePath,
+        "--head-summary",
+        headPath,
+        "--out-json",
+        outPath,
+        "--mode",
+        "strict",
+      ],
+      { encoding: "utf-8" }
+    );
+
+    expect(result.status).toBe(0);
+
+    const compare = JSON.parse(fs.readFileSync(outPath, "utf-8")) as {
+      advisory: boolean;
+      gateMode: string;
+      summary: { alertCount: number };
+    };
+    expect(compare.advisory).toBe(false);
+    expect(compare.gateMode).toBe("strict");
+    expect(compare.summary.alertCount).toBe(0);
   });
 
   it("ignores tiny absolute deltas when base metric is under the small-baseline threshold", () => {

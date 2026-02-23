@@ -20,6 +20,10 @@ on:
         description: "Publish benchmark snapshot to imageforge-site (true|false)"
         required: false
         default: "false"
+      allow_regression_override:
+        description: "Allow publishing despite benchmark regression alerts (true|false)"
+        required: false
+        default: "false"
   schedule:
     - cron: "20 2 * * *"
 
@@ -35,6 +39,8 @@ jobs:
       tier: ${{ steps.mode.outputs.tier }}
       run_count: ${{ steps.mode.outputs.run_count }}
       dataset_version: ${{ steps.mode.outputs.dataset_version }}
+      compare_mode: ${{ steps.mode.outputs.compare_mode }}
+      regression_override: ${{ steps.mode.outputs.regression_override }}
     steps:
       - name: Checkout head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -68,14 +74,30 @@ jobs:
             echo "tier=tier30" >> "$GITHUB_OUTPUT"
             echo "run_count=4" >> "$GITHUB_OUTPUT"
             echo "dataset_version=1.0.0" >> "$GITHUB_OUTPUT"
+            echo "compare_mode=advisory" >> "$GITHUB_OUTPUT"
+            echo "regression_override=false" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
             echo "tier=tier200" >> "$GITHUB_OUTPUT"
             echo "run_count=10" >> "$GITHUB_OUTPUT"
             echo "dataset_version=1.0.0" >> "$GITHUB_OUTPUT"
+            echo "compare_mode=strict" >> "$GITHUB_OUTPUT"
+            echo "regression_override=false" >> "$GITHUB_OUTPUT"
           else
             echo "tier=${{ inputs.tier }}" >> "$GITHUB_OUTPUT"
             echo "run_count=${{ inputs.run_count }}" >> "$GITHUB_OUTPUT"
             echo "dataset_version=${{ inputs.dataset_version }}" >> "$GITHUB_OUTPUT"
+            if [ "${{ inputs.publish_site_snapshot }}" = "true" ]; then
+              if [ "${{ inputs.allow_regression_override }}" = "true" ]; then
+                echo "compare_mode=advisory" >> "$GITHUB_OUTPUT"
+                echo "regression_override=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "compare_mode=strict" >> "$GITHUB_OUTPUT"
+                echo "regression_override=false" >> "$GITHUB_OUTPUT"
+              fi
+            else
+              echo "compare_mode=advisory" >> "$GITHUB_OUTPUT"
+              echo "regression_override=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Install dependencies (head)
@@ -182,7 +204,9 @@ jobs:
             --run-count "${{ steps.mode.outputs.run_count }}" \
             --profiles P1,P2,P3
 
-      - name: Compare head vs base (advisory)
+      - name: Compare head vs base
+        id: compare
+        continue-on-error: true
         run: |
           mkdir -p "$RUNNER_TEMP/bench-compare"
           node head/scripts/bench/compare-benchmark.mjs \
@@ -193,6 +217,7 @@ jobs:
             --warm-threshold-pct 10 \
             --cold-threshold-pct 15 \
             --p95-threshold-pct 20 \
+            --mode "${{ steps.mode.outputs.compare_mode }}" \
             --small-baseline-ms 100 \
             --min-absolute-delta-ms 15
 
@@ -204,11 +229,27 @@ jobs:
             --compare "$RUNNER_TEMP/bench-compare/compare.json" \
             --out "$RUNNER_TEMP/bench-compare/report.md"
 
-      - name: Add advisory warnings
+      - name: Publish regression signals
         run: |
           ALERTS=$(node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(String(c.summary.alertCount));" "$RUNNER_TEMP/bench-compare/compare.json")
           if [ "$ALERTS" -gt 0 ]; then
-            echo "::warning::Benchmark advisory detected $ALERTS regression alert(s). See benchmark artifacts for details."
+            MODE="${{ steps.mode.outputs.compare_mode }}"
+            OVERRIDE="${{ steps.mode.outputs.regression_override }}"
+            if [ "$MODE" = "strict" ] && [ "$OVERRIDE" != "true" ]; then
+              echo "::error::Benchmark strict mode detected $ALERTS regression alert(s)."
+            else
+              echo "::warning::Benchmark ${MODE} mode detected $ALERTS regression alert(s)."
+            fi
+          fi
+
+      - name: Enforce benchmark gate
+        run: |
+          MODE="${{ steps.mode.outputs.compare_mode }}"
+          OVERRIDE="${{ steps.mode.outputs.regression_override }}"
+          ALERTS=$(node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(String(c.summary.alertCount));" "$RUNNER_TEMP/bench-compare/compare.json")
+          if [ "$MODE" = "strict" ] && [ "$ALERTS" -gt 0 ] && [ "$OVERRIDE" != "true" ]; then
+            echo "Strict benchmark gate failed with $ALERTS regression alert(s)." >&2
+            exit 1
           fi
 
       - name: Publish step summary
@@ -220,6 +261,8 @@ jobs:
             echo "- Dataset version: ${{ steps.mode.outputs.dataset_version }}"
             echo "- Tier: ${{ steps.mode.outputs.tier }}"
             echo "- Run count: ${{ steps.mode.outputs.run_count }}"
+            echo "- Compare mode: ${{ steps.mode.outputs.compare_mode }}"
+            echo "- Regression override: ${{ steps.mode.outputs.regression_override }}"
             echo
             cat "$RUNNER_TEMP/bench-compare/report.md"
           } >> "$GITHUB_STEP_SUMMARY"

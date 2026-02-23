@@ -14,6 +14,7 @@ function usage() {
   [--warm-threshold-pct <n>] \
   [--cold-threshold-pct <n>] \
   [--p95-threshold-pct <n>] \
+  [--mode <advisory|strict>] \
   [--small-baseline-ms <n>] \
   [--min-absolute-delta-ms <n>]`);
 }
@@ -94,6 +95,11 @@ function toMarkdown(result) {
 export function compareSummaries(baseSummary, headSummary, thresholdOptions = {}) {
   assertValid(validateSummary(baseSummary), "base summary");
   assertValid(validateSummary(headSummary), "head summary");
+  const gateModeRaw = String(thresholdOptions.mode ?? "advisory").toLowerCase();
+  if (gateModeRaw !== "advisory" && gateModeRaw !== "strict") {
+    throw new Error("mode must be either 'advisory' or 'strict'.");
+  }
+  const gateMode = gateModeRaw;
 
   const thresholds = {
     warmThresholdPct: Number(thresholdOptions.warmThresholdPct ?? 10),
@@ -200,7 +206,8 @@ export function compareSummaries(baseSummary, headSummary, thresholdOptions = {}
   return {
     version: "1.0",
     generatedAt: new Date().toISOString(),
-    advisory: true,
+    advisory: gateMode === "advisory",
+    gateMode,
     thresholds,
     summary: {
       totalPairs: pairs.length,
@@ -233,6 +240,7 @@ async function main() {
     warmThresholdPct: args["warm-threshold-pct"],
     coldThresholdPct: args["cold-threshold-pct"],
     p95ThresholdPct: args["p95-threshold-pct"],
+    mode: args.mode,
     smallBaselineMs: args["small-baseline-ms"],
     minAbsoluteDeltaMs: args["min-absolute-delta-ms"],
   });
@@ -251,6 +259,12 @@ async function main() {
   }
 
   console.log(JSON.stringify(comparison, null, 2));
+
+  if (comparison.gateMode === "strict" && comparison.summary.alertCount > 0) {
+    throw new Error(
+      `Benchmark strict mode failed with ${comparison.summary.alertCount.toString()} regression alert(s).`
+    );
+  }
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {

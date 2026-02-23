@@ -4,10 +4,9 @@ import sharp from "sharp";
 import { fromPosix, outputPathFor, toPosix } from "../processor.js";
 import type { OutputFormat, ProcessOptions } from "../processor.js";
 import { resolveEffectiveWidths, resolveOrientedDimensions } from "../responsive.js";
+import { LIMIT_INPUT_PIXELS } from "../shared.js";
 import { collectEntryOutputs } from "./cache.js";
 import type { CacheEntry } from "./cache.js";
-
-const LIMIT_INPUT_PIXELS = 100_000_000;
 
 export interface PreflightItem {
   imagePath: string;

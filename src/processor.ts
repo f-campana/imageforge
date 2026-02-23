@@ -8,6 +8,7 @@ import {
   resolveEffectiveWidths,
   resolveOrientedDimensions,
 } from "./responsive.js";
+import { LIMIT_INPUT_PIXELS } from "./shared.js";
 
 export type OutputFormat = "webp" | "avif";
 
@@ -42,7 +43,6 @@ export interface DiscoveryWarning {
   message: string;
 }
 
-const LIMIT_INPUT_PIXELS = 100_000_000;
 const IGNORED_DIRS = new Set([".git", "node_modules", ".next", "dist", "build", ".turbo"]);
 const HASH_CHUNK_SIZE = 1024 * 1024;
 

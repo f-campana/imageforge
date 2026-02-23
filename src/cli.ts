@@ -10,6 +10,7 @@ import { normalizeGlobPattern } from "./glob.js";
 import { toPosix, type OutputFormat } from "./processor.js";
 import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive.js";
 import { getDefaultConcurrency, runImageforge } from "./runner.js";
+import { isRecord } from "./shared.js";
 
 interface CliOptions {
   output?: string;
@@ -66,10 +67,6 @@ function defaultInitConfig(defaultConcurrency: number): ImageForgeConfig {
     cache: true,
     concurrency: defaultConcurrency,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readPackageVersion(): string {

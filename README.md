@@ -316,6 +316,7 @@ Notes:
 
 - `webp` and `avif` source files are currently excluded as inputs.
 - GIF handling is static-only (first frame).
+- Source-input expansion roadmap: `docs/product/source-input-roadmap.md`.
 
 ## CI Mode
 

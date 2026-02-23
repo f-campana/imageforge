@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { normalizeGlobPattern } from "./glob.js";
 import { MAX_WIDTH_COUNT, normalizeRequestedWidths } from "./responsive.js";
+import { isRecord } from "./shared.js";
 
 export interface ImageForgeConfig {
   output?: string;
@@ -49,10 +50,6 @@ const ALLOWED_KEYS = new Set([
   "verbose",
   "quiet",
 ]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function parseString(
   value: unknown,

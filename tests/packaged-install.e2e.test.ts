@@ -49,14 +49,19 @@ describe("packaged install e2e", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-pack-e2e-"));
   const tarballDir = path.join(tempRoot, "tarball");
   const consumerDir = path.join(tempRoot, "consumer");
+  const oneShotDir = path.join(tempRoot, "oneshot");
   const npmCacheDir = path.join(tempRoot, "npm-cache");
   const inputDir = path.join(consumerDir, "images");
+  const oneShotInputDir = path.join(oneShotDir, "images");
   const manifestPath = path.join(consumerDir, "imageforge.json");
+  const oneShotManifestPath = path.join(oneShotDir, "imageforge.json");
 
   beforeAll(async () => {
     fs.mkdirSync(tarballDir, { recursive: true });
     fs.mkdirSync(consumerDir, { recursive: true });
+    fs.mkdirSync(oneShotDir, { recursive: true });
     fs.mkdirSync(inputDir, { recursive: true });
+    fs.mkdirSync(oneShotInputDir, { recursive: true });
 
     await sharp({
       create: {
@@ -68,6 +73,17 @@ describe("packaged install e2e", () => {
     })
       .jpeg({ quality: 90 })
       .toFile(path.join(inputDir, "fixture.jpg"));
+
+    await sharp({
+      create: {
+        width: 88,
+        height: 66,
+        channels: 3,
+        background: { r: 120, g: 100, b: 80 },
+      },
+    })
+      .jpeg({ quality: 90 })
+      .toFile(path.join(oneShotInputDir, "oneshot.jpg"));
   });
 
   afterAll(() => {
@@ -82,6 +98,28 @@ describe("packaged install e2e", () => {
 
     const tarballPath = path.join(tarballDir, `imageforge-cli-${PACKAGE_VERSION}.tgz`);
     expect(fs.existsSync(tarballPath)).toBe(true);
+
+    const oneShot = runCommand(
+      "npm",
+      [
+        "exec",
+        "--yes",
+        "--package",
+        tarballPath,
+        "--",
+        "imageforge",
+        oneShotInputDir,
+        "-o",
+        oneShotManifestPath,
+      ],
+      oneShotDir,
+      {
+        npm_config_cache: npmCacheDir,
+      }
+    );
+    expect(oneShot.status).toBe(0);
+    expect(fs.existsSync(oneShotManifestPath)).toBe(true);
+    expect(fs.existsSync(path.join(oneShotInputDir, "oneshot.webp"))).toBe(true);
 
     const init = runCommand("npm", ["init", "-y"], consumerDir, {
       npm_config_cache: npmCacheDir,

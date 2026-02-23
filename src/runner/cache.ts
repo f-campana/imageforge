@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { fromPosix } from "../processor.js";
+import { isRecord } from "../shared.js";
 import type { ImageForgeEntry, ImageForgeVariant } from "../types.js";
 
 export interface CacheEntry {
@@ -17,10 +18,6 @@ const CACHE_LOCK_MAX_POLL_MS = 500;
 const CACHE_LOCK_BACKOFF_FACTOR = 1.5;
 
 export const CACHE_FILE = ".imageforge-cache.json";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isOutputRecord(value: unknown): value is { path: string; size: number } {
   return (

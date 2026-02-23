@@ -358,7 +358,8 @@ pnpm run check
 ```
 
 Quality checks run in CI on Node `20`, `22`, and `24`.
-Mutation testing runs as an advisory pilot in CI (non-blocking) and uploads mutation artifacts.
+Mutation testing runs as an advisory pilot in CI (non-blocking), uploads mutation artifacts,
+and reports score trend deltas against `.github/mutation-baseline.json`.
 
 ## Release Workflow
 

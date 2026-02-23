@@ -1,0 +1,8 @@
+{
+  "overallMutationScore": 1.43,
+  "detectableMutationScore": 50,
+  "totalMutants": 70,
+  "detectableMutants": 2,
+  "updatedAt": "2026-02-23T20:26:03Z",
+  "scope": ["src/glob.ts", "src/shared.ts"]
+}

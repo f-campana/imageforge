@@ -65,6 +65,7 @@
     "pretest": "pnpm run build",
     "test": "vitest run --exclude tests/packaged-install.e2e.test.ts",
     "test:coverage": "vitest run --exclude tests/packaged-install.e2e.test.ts --coverage",
+    "test:fault-injection": "vitest run tests/fault-injection.pilot.test.ts",
     "pretest:e2e": "pnpm run build",
     "test:e2e": "vitest run tests/packaged-install.e2e.test.ts",
     "test:watch": "vitest --exclude tests/packaged-install.e2e.test.ts",

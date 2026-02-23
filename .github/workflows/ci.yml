@@ -160,6 +160,53 @@ jobs:
             echo "This does not block merges in Phase 6A."
           } >> "$GITHUB_STEP_SUMMARY"
 
+  fault-injection-advisory:
+    name: Fault Injection Advisory (Node 22)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fault-injection pilot (advisory)
+        id: fault_injection
+        continue-on-error: true
+        run: |
+          mkdir -p .tmp/fault-injection
+          pnpm exec vitest run tests/fault-injection.pilot.test.ts --reporter=json --outputFile=.tmp/fault-injection/report.json
+
+      - name: Upload fault-injection artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: fault-injection-cli
+          path: .tmp/fault-injection
+          if-no-files-found: warn
+
+      - name: Publish advisory status
+        if: steps.fault_injection.outcome == 'failure'
+        run: |
+          echo "::warning::Fault-injection advisory failed. See uploaded artifacts for details."
+          {
+            echo "### Fault Injection Advisory"
+            echo
+            echo "Fault-injection pilot failed in advisory mode."
+            echo "This does not block merges in Phase 6A."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   security-audit:
     name: Security Audit (Node 22)
     runs-on: ubuntu-latest

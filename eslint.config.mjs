@@ -14,6 +14,8 @@ export default tseslint.config(
       "eslint.config.mjs",
       "dist/**",
       "node_modules/**",
+      ".tmp/**",
+      ".stryker-tmp/**",
       "tests/fixtures/**",
       "tests/cli-fixtures/**",
       "tests/test-output/**",

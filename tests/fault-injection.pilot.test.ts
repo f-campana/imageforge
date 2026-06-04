@@ -14,7 +14,7 @@ const SYNC_SITE_BENCHMARK = path.join(ROOT, "scripts", "bench", "sync-site-bench
 const installCommand = "pnpm install --frozen-lockfile";
 const formatterCommand =
   "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json";
-const gitAddCommand = "git add -A";
+const gitAddCommand = "git add data/benchmarks/latest.json data/benchmarks/history.json";
 const gitPushCommand = "git push --force-with-lease origin codex/benchmark-sync-nightly";
 
 function writeJson(filePath: string, value: unknown): void {

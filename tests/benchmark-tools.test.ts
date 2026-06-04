@@ -837,7 +837,8 @@ describe("sync-site benchmark formatting normalization", () => {
   const installCommand = "pnpm install --frozen-lockfile";
   const formatterCommand =
     "pnpm exec prettier --write data/benchmarks/latest.json data/benchmarks/history.json";
-  const gitStatusCommand = "git status --porcelain";
+  const gitStatusCommand =
+    "git status --porcelain -- data/benchmarks/latest.json data/benchmarks/history.json";
 
   const writeTemplateRepo = (templateRepoDir: string): void => {
     fs.mkdirSync(path.join(templateRepoDir, "scripts", "benchmark"), { recursive: true });
@@ -948,6 +949,12 @@ exit 0
       expect(operations).toContain(installCommand);
       expect(operations).toContain(formatterCommand);
       expect(operations).toContain(gitStatusCommand);
+      expect(fs.existsSync(path.join(workspace, "site-benchmark-snapshot.json"))).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(workspace, "imageforge-site", ".tmp", "site-benchmark-snapshot.json")
+        )
+      ).toBe(false);
       expect(operations.indexOf(installCommand)).toBeLessThan(operations.indexOf(formatterCommand));
       expect(operations.indexOf(formatterCommand)).toBeLessThan(
         operations.indexOf(gitStatusCommand)

@@ -9,6 +9,7 @@ import { parseArgs, readJson, resolvePath, writeJson } from "./common.mjs";
 import { assertValid, validateSiteSnapshot } from "./contracts.mjs";
 
 let activeRedact = (value) => String(value ?? "");
+const benchmarkDataPaths = ["data/benchmarks/latest.json", "data/benchmarks/history.json"];
 
 function usage() {
   console.log(`Usage: node scripts/bench/sync-site-benchmark.mjs \\
@@ -338,7 +339,7 @@ async function main() {
 
     runChecked("pnpm", ["install", "--frozen-lockfile"], { cwd: cloneDir }, redact);
 
-    const localSnapshotPath = path.join(cloneDir, ".tmp", "site-benchmark-snapshot.json");
+    const localSnapshotPath = path.join(workspace, "site-benchmark-snapshot.json");
     writeJson(localSnapshotPath, snapshot);
 
     runChecked(
@@ -356,18 +357,17 @@ async function main() {
 
     runChecked(
       "pnpm",
-      [
-        "exec",
-        "prettier",
-        "--write",
-        "data/benchmarks/latest.json",
-        "data/benchmarks/history.json",
-      ],
+      ["exec", "prettier", "--write", ...benchmarkDataPaths],
       { cwd: cloneDir },
       redact
     );
 
-    const status = runChecked("git", ["status", "--porcelain"], { cwd: cloneDir }, redact);
+    const status = runChecked(
+      "git",
+      ["status", "--porcelain", "--", ...benchmarkDataPaths],
+      { cwd: cloneDir },
+      redact
+    );
     if (status.stdout.trim().length === 0) {
       console.log("No site changes detected; skipping commit and PR update.");
       return;
@@ -386,7 +386,7 @@ async function main() {
       redact
     );
 
-    runChecked("git", ["add", "-A"], { cwd: cloneDir }, redact);
+    runChecked("git", ["add", ...benchmarkDataPaths], { cwd: cloneDir }, redact);
 
     const commitMessage = `chore(benchmark): sync snapshot ${snapshot.snapshotId}`;
     runChecked("git", ["commit", "-m", commitMessage], { cwd: cloneDir }, redact);

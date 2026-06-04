@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9](https://github.com/f-campana/imageforge/compare/v0.1.8...v0.1.9) (2026-06-04)
+
+
+### Bug Fixes
+
+* **benchmark:** keep site sync scoped to data files ([201c69e](https://github.com/f-campana/imageforge/commit/201c69e091c3fb20060654af606f36ca04f105fd))
+
 ## [0.1.8](https://github.com/f-campana/imageforge/compare/v0.1.7...v0.1.8) (2026-02-23)
 
 

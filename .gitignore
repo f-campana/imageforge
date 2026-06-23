@@ -7,3 +7,6 @@ coverage/
 *.log
 *.tgz
 UNIFIED_SHIP_SPEC_v0.1.0.md
+examples/vite-basic/dist/
+examples/vite-basic/public/imageforge/
+examples/vite-basic/src/assets/images/hero.jpg

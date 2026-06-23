@@ -39,6 +39,11 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js",
       "require": "./dist/cjs/types.js"
+    },
+    "./render": {
+      "types": "./dist/render/index.d.ts",
+      "import": "./dist/render/index.js",
+      "require": "./dist/cjs/render/index.js"
     }
   },
   "files": [
@@ -75,6 +80,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "check:workflow-action-pinning": "node scripts/security/check-workflow-action-pinning.mjs",
+    "example:vite:build": "pnpm run build && node examples/vite-basic/scripts/prepare.mjs && vite build examples/vite-basic",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm test",
     "release:verify": "pnpm run check && pnpm run build && npm_config_cache=/tmp/npm-cache pnpm pack --dry-run",
     "prepack": "pnpm run build",
@@ -110,6 +116,7 @@
     "prettier": "^3.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.0.0",
+    "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
   "engines": {

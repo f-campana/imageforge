@@ -16,6 +16,7 @@ export default tseslint.config(
       "node_modules/**",
       ".tmp/**",
       ".stryker-tmp/**",
+      "examples/vite-basic/dist/**",
       "tests/fixtures/**",
       "tests/cli-fixtures/**",
       "tests/test-output/**",

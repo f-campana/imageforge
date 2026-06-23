@@ -1,4 +1,6 @@
 export * from "./types.js";
+export * from "./render/getPictureProps.js";
+export * from "./adapters/vite/index.js";
 export {
   convertImage,
   discoverImages,

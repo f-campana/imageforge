@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ImageForge Vite proof</title>
+  </head>
+  <body>
+    <main>
+      <h1>ImageForge Vite proof</h1>
+      <picture id="hero"></picture>
+    </main>
+    <script type="module">
+      import { getPictureProps, manifest } from "virtual:imageforge";
+
+      const pictureProps = getPictureProps("hero.jpg", {
+        alt: "Blue ImageForge fixture",
+        sizes: "100vw",
+        fallbackFormat: "webp",
+      });
+      const picture = document.querySelector("#hero");
+
+      for (const sourceProps of pictureProps.sources) {
+        const source = document.createElement("source");
+        source.type = sourceProps.type;
+        source.srcset = sourceProps.srcSet;
+        source.sizes = sourceProps.sizes;
+        picture.append(source);
+      }
+
+      const image = document.createElement("img");
+      Object.assign(image, pictureProps.img);
+      picture.append(image);
+      console.info("ImageForge manifest", manifest);
+    </script>
+  </body>
+</html>

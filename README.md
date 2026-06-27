@@ -252,32 +252,32 @@ Notes:
 - If `--out-dir` is outside the input tree, manifest paths may include `../` segments.
 - When `--widths` is used, `outputs.<format>` points to the largest generated variant.
 - `variants[*].width` stores effective generated widths (requested values filtered by source size).
+- Rendering contract details: `docs/product/rendering-contract-v0.md`.
 
-## Next.js Integration Example
+## Framework-Neutral Rendering Props
 
 ```ts
+import { getPictureProps } from "@imageforge/cli";
 import manifest from "./imageforge.json";
 
-type Manifest = typeof manifest;
-
-export function getImageData(src: string) {
-  return (manifest as Manifest).images[src];
-}
+const picture = getPictureProps(manifest, "hero.jpg", {
+  alt: "Sunrise over a valley",
+  sizes: "(max-width: 720px) 100vw, 1200px",
+  publicBasePath: "/images",
+});
 ```
 
-Then use:
+The helper emits ordered AVIF/WebP sources, a documented fallback image, dimensions, and optional
+blur data. Rendering code maps those values to picture markup. ImageForge does not currently ship a
+framework adapter, so generated derivative serving remains an application/build configuration
+responsibility.
 
-- Original source path for `src`
-- `getImageData(src)?.blurDataURL` for `placeholder="blur"`
+Experimental Vite adapter work exists behind an internal API and is not yet published as a
+separate package. It is a build-tool proof, not a framework-support claim; see
+`docs/product/vite-adapter-experimental.md`.
 
-Optional `srcset` helper for responsive variants:
-
-```ts
-export function getSrcSet(src: string, format: "webp" | "avif") {
-  const variants = (manifest as Manifest).images[src]?.variants?.[format];
-  return variants?.map((variant) => `${variant.path} ${variant.width}w`).join(", ");
-}
-```
+A typed React/Vite example exists under `examples/vite-react` as an experimental consumer proof;
+see `docs/product/vite-react-example.md`.
 
 ## Programmatic API
 
@@ -303,8 +303,9 @@ const processor = require("@imageforge/cli/processor");
 const { getDefaultConcurrency, runImageforge } = require("@imageforge/cli/runner");
 ```
 
-Useful root exports include `processImage`, `convertImage`, `generateBlurDataURL`, and manifest
-types. The runner API is intentionally subpath-only and semver-stable.
+Useful root exports include `getPictureProps`, `ImageForgeRenderError`, `processImage`,
+`convertImage`, `generateBlurDataURL`, and manifest/rendering types. The runner API is intentionally
+subpath-only and semver-stable.
 
 ## Source Input Scope
 

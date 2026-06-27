@@ -16,6 +16,9 @@ export default tseslint.config(
       "node_modules/**",
       ".tmp/**",
       ".stryker-tmp/**",
+      "examples/vite-basic/dist/**",
+      "examples/vite-react/dist/**",
+      "examples/vite-react/public/imageforge/**",
       "tests/fixtures/**",
       "tests/cli-fixtures/**",
       "tests/test-output/**",
@@ -24,14 +27,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked.map((config) => ({
     ...config,
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
   })),
   ...tseslint.configs.stylisticTypeChecked.map((config) => ({
     ...config,
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
   })),
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -39,7 +42,7 @@ export default tseslint.config(
         ...globals.node,
       },
       parserOptions: {
-        project: "./tsconfig.typecheck.json",
+        project: ["./tsconfig.typecheck.json", "./examples/vite-react/tsconfig.json"],
         tsconfigRootDir,
       },
     },

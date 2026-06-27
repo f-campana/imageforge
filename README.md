@@ -276,6 +276,9 @@ Experimental Vite adapter work exists behind an internal API and is not yet publ
 separate package. It is a build-tool proof, not a framework-support claim; see
 `docs/product/vite-adapter-experimental.md`.
 
+A typed React/Vite example exists under `examples/vite-react` as an experimental consumer proof;
+see `docs/product/vite-react-example.md`.
+
 ## Programmatic API
 
 ImageForge supports both ESM (`import`) and CJS (`require`) consumers.

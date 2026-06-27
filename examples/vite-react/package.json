@@ -1,0 +1,10 @@
+{
+  "name": "imageforge-vite-react-consumer-proof",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "node scripts/prepare.mjs",
+    "typecheck": "pnpm --dir ../.. exec tsc -p examples/vite-react/tsconfig.json --noEmit",
+    "build": "pnpm run prepare && pnpm run typecheck && pnpm --dir ../.. exec vite build examples/vite-react"
+  }
+}

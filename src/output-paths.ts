@@ -51,13 +51,24 @@ export function resolveOutputPaths(
 
 export function inspectOutputRoot(outputDir: string): OutputRootState {
   const logicalRoot = path.resolve(outputDir);
-  try {
-    const stat = fs.lstatSync(logicalRoot);
-    if (stat.isSymbolicLink()) return "symlink";
-    return stat.isDirectory() ? "directory" : "other";
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing";
-    throw error;
+  let cursor = logicalRoot;
+  let rootIsMissing = false;
+
+  for (;;) {
+    try {
+      const stat = fs.lstatSync(cursor);
+      if (stat.isSymbolicLink()) return "symlink";
+      if (!stat.isDirectory()) return "other";
+      return rootIsMissing ? "missing" : "directory";
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOTDIR") return "other";
+      if (code !== "ENOENT") throw error;
+      rootIsMissing = true;
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return "missing";
+      cursor = parent;
+    }
   }
 }
 

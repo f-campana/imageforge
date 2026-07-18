@@ -186,6 +186,36 @@ describe("generated-state CLI contract", () => {
     }
   );
 
+  it.runIf(process.platform !== "win32")(
+    "rejects a missing output root below a symlinked parent before any write",
+    async () => {
+      const directory = freshDirectory("symlinked-output-root-parent");
+      const input = path.join(directory, "input");
+      const external = path.join(directory, "external");
+      const outputParent = path.join(directory, "public");
+      const outputRoot = path.join(outputParent, "generated");
+      const outputManifest = path.join(OUTPUT, "symlinked-output-root-parent.json");
+      fs.mkdirSync(input);
+      fs.mkdirSync(external);
+      fs.symlinkSync(external, outputParent);
+      await createJpeg(path.join(input, "hero.jpg"), 40, 20, { r: 1, g: 2, b: 3 });
+
+      const result = runCli([input, "--out-dir", outputRoot, "--json", "-o", outputManifest]);
+
+      expect(result.status).toBe(1);
+      expect((JSON.parse(result.stdout) as { errors: { code: string }[] }).errors).toContainEqual(
+        expect.objectContaining({ code: "OUTPUT_ROOT_UNSAFE" })
+      );
+      expect(fs.existsSync(path.join(external, "generated"))).toBe(false);
+      expect(fs.existsSync(path.join(external, "generated", ".imageforge-cache.json"))).toBe(false);
+      expect(fs.existsSync(path.join(external, "generated", ".imageforge-cache.json.lock"))).toBe(
+        false
+      );
+      expect(fs.existsSync(path.join(external, "generated", "hero.webp"))).toBe(false);
+      expect(fs.existsSync(outputManifest)).toBe(false);
+    }
+  );
+
   it("keeps a partial v1 migration valid until every retained entry reaches v2", async () => {
     const directory = freshDirectory("partial-cache-migration");
     const manifest = path.join(OUTPUT, "partial-cache-migration.json");

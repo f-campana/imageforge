@@ -51,6 +51,7 @@ describe("canonical output paths", () => {
     const fileRoot = path.join(root, "file-root");
     fs.writeFileSync(fileRoot, "x");
     expect(inspectOutputRoot(fileRoot)).toBe("other");
+    expect(inspectOutputRoot(path.join(fileRoot, "generated"))).toBe("other");
     expect(() => {
       assertSafeOutputParents(path.join(fileRoot, "hero.webp"), fileRoot);
     }).toThrow("not a directory");
@@ -112,6 +113,24 @@ describe("canonical output paths", () => {
       expect(() => {
         assertSafeOutputParents(path.join(nestedLink, "hero.webp"), outputDir);
       }).toThrow("symlinked output directory");
+    }
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "rejects a missing output root below a symlinked existing ancestor",
+    () => {
+      const { root } = workspace();
+      const external = path.join(root, "external");
+      fs.mkdirSync(external);
+      const parentLink = path.join(root, "public");
+      fs.symlinkSync(external, parentLink);
+      const missingRoot = path.join(parentLink, "generated");
+
+      expect(inspectOutputRoot(missingRoot)).toBe("symlink");
+      expect(() => {
+        assertSafeOutputParents(path.join(missingRoot, "hero.webp"), missingRoot);
+      }).toThrow("symlinked output root");
+      expect(fs.existsSync(path.join(external, "generated"))).toBe(false);
     }
   );
 

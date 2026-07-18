@@ -19,11 +19,14 @@ interface CommandResult {
   stderr: string;
 }
 
-function quoteWindowsCommandArgument(argument: string): string {
-  if (/[\0\r\n"]/.test(argument)) {
-    throw new Error("Windows command arguments must not contain NUL, line breaks, or quotes");
-  }
-  return `"${argument}"`;
+function commandEnv(extraEnv: Record<string, string>): NodeJS.ProcessEnv {
+  const overriddenKeys = new Set(Object.keys(extraEnv).map((key) => key.toUpperCase()));
+  return {
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !overriddenKeys.has(key.toUpperCase()))
+    ),
+    ...extraEnv,
+  };
 }
 
 function runCommand(
@@ -34,15 +37,10 @@ function runCommand(
 ): CommandResult {
   const windowsShim = process.platform === "win32" && ["npm", "npx", "pnpm"].includes(command);
   const executable = windowsShim ? (process.env.ComSpec ?? "cmd.exe") : command;
-  const executableArgs = windowsShim
-    ? ["/d", "/s", "/c", `${command}.cmd ${args.map(quoteWindowsCommandArgument).join(" ")}`]
-    : args;
+  const executableArgs = windowsShim ? ["/d", "/s", "/c", `${command}.cmd`, ...args] : args;
   const result = spawnSync(executable, executableArgs, {
     cwd,
-    env: {
-      ...process.env,
-      ...extraEnv,
-    },
+    env: commandEnv(extraEnv),
     encoding: "utf-8",
   });
 
@@ -107,7 +105,9 @@ describe("packaged install e2e", () => {
     const pack = runCommand("pnpm", ["pack", "--pack-destination", tarballDir], ROOT, {
       npm_config_cache: npmCacheDir,
     });
-    expect(pack.status).toBe(0);
+    if (pack.status !== 0) {
+      throw new Error(`pnpm pack failed:\n${pack.stderr || pack.stdout}`);
+    }
 
     const tarballPath = path.join(tarballDir, `imageforge-cli-${PACKAGE_VERSION}.tgz`);
     expect(fs.existsSync(tarballPath)).toBe(true);

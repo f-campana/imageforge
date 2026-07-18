@@ -118,7 +118,8 @@ One JSON object per run:
     "runCount": 10,
     "datasetVersion": "1.0.0",
     "runner": "ubuntu-24.04",
-    "nodeVersion": "22"
+    "nodeVersion": "22",
+    "cliVersion": "0.1.9"
   },
   "thresholds": {
     "warmThresholdPct": 10,
@@ -141,3 +142,7 @@ One JSON object per run:
   "deltas": []
 }
 ```
+
+`source.cliVersion` records the package version exercised by the benchmark. Exporters always emit
+it. The validator accepts historical schema `1.0` snapshots that predate the field, but rejects an
+empty value when it is present.

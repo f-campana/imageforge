@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { formatIsoNow, parseArgs, readJson, resolvePath, writeJson } from "./common.mjs";
 import { assertValid, validateSiteSnapshot, validateSummary } from "./contracts.mjs";
+
+const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function usage() {
   console.log(`Usage: node scripts/bench/export-site-snapshot.mjs \\
@@ -132,6 +136,7 @@ function buildSnapshot({ headSummary, baseSummary, compare, metadata, headline, 
       datasetVersion: metadata.datasetVersion,
       runner: metadata.runner,
       nodeVersion: metadata.nodeVersion,
+      cliVersion: metadata.cliVersion,
     },
     thresholds: {
       warmThresholdPct: compare.thresholds.warmThresholdPct,
@@ -219,7 +224,12 @@ async function main() {
     datasetVersion: args["dataset-version"].trim(),
     runner: args.runner.trim(),
     nodeVersion: args["node-version"].trim(),
+    cliVersion: readJson(path.join(REPOSITORY_ROOT, "package.json")).version,
   };
+
+  if (typeof metadata.cliVersion !== "string" || metadata.cliVersion.trim().length === 0) {
+    throw new Error("package.json version must be a non-empty string.");
+  }
 
   const headSummary = readJson(headSummaryPath);
   const baseSummary = readJson(baseSummaryPath);

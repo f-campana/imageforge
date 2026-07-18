@@ -286,6 +286,9 @@ export function validateSiteSnapshot(value) {
         errors.push(`source.${key} must be a non-empty string.`);
       }
     }
+    if (value.source.cliVersion !== undefined && !isNonEmptyString(value.source.cliVersion)) {
+      errors.push("source.cliVersion must be a non-empty string when provided.");
+    }
     for (const key of ["runId", "runAttempt", "runCount"]) {
       if (!hasFiniteNumber(value.source[key])) {
         errors.push(`source.${key} must be a finite number.`);

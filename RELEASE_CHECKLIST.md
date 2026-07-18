@@ -6,7 +6,7 @@ Use it as a release gate: if any required item fails, stop and fix before publis
 
 ## 1. Prerequisites
 
-- Node.js `>=22` installed (`node -v`).
+- Node.js `>=20` installed (`node -v`).
 - `pnpm` installed (`pnpm -v`).
 - Clean working tree preferred (`git status`).
 - Dependencies installed (`pnpm install --frozen-lockfile`).
@@ -73,7 +73,6 @@ async function main() {
     .toFile(path.join(root, "input", "sub dir", "icon café.png"));
 
   fs.writeFileSync(path.join(root, "input", "notes.txt"), "not an image");
-  fs.writeFileSync(path.join(root, "input", "broken.jpg"), "");
 }
 
 main().catch((error) => {
@@ -95,9 +94,24 @@ node "$IF_ROOT/dist/cli.js" --help
 Pass criteria:
 
 - Version is printed.
-- Help contains key options (`--check`, `--out-dir`, `--json`, `--concurrency`).
+- Help contains key options (`--dry-run`, `--check`, `--out-dir`, `--json`, `--concurrency`).
 
-### 4.2 First processing run
+### 4.2 Non-writing preview
+
+```bash
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" \
+  --dry-run \
+  --out-dir "$IF_TMP/preview-generated" \
+  -o "$IF_TMP/preview-manifest.json"
+```
+
+Pass criteria:
+
+- Exit code `0`.
+- The output lists the work that would be performed.
+- `preview-generated`, `preview-manifest.json`, the cache file, and the cache lock do not exist.
+
+### 4.3 First processing run
 
 ```bash
 node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" \
@@ -113,7 +127,7 @@ Pass criteria:
 - Cache exists at `$IF_TMP/input/.imageforge-cache.json`.
 - Manifest exists at `$IF_TMP/manifest.json`.
 
-### 4.3 Cache behavior
+### 4.4 Cache behavior
 
 Run the same command again.
 
@@ -123,10 +137,10 @@ Pass criteria:
 - Output indicates cached reuse.
 - Processed count should be `0` (or all files reported as cached).
 
-### 4.4 `--check` up-to-date path
+### 4.5 `--check` up-to-date path
 
 ```bash
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -o "$IF_TMP/manifest.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -f webp,avif -o "$IF_TMP/manifest.json"
 ```
 
 Pass criteria:
@@ -134,7 +148,88 @@ Pass criteria:
 - Exit code `0`.
 - Output indicates all images are up to date.
 
-### 4.5 `--check` needs-processing path
+Change only the informational manifest timestamp and check again:
+
+```bash
+node -e '
+  const fs = require("fs");
+  const file = process.argv[1];
+  const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+  manifest.generated = "2000-01-01T00:00:00.000Z";
+  fs.writeFileSync(file, JSON.stringify(manifest, null, 2));
+' "$IF_TMP/manifest.json"
+
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -f webp,avif -o "$IF_TMP/manifest.json"
+```
+
+Pass criteria:
+
+- Exit code remains `0`; the audit timestamp is not part of content freshness.
+
+Then tamper with a manifest image entry and check again:
+
+```bash
+node -e '
+  const fs = require("fs");
+  const file = process.argv[1];
+  const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+  manifest.images["hero.jpg"].hash = "stale";
+  fs.writeFileSync(file, JSON.stringify(manifest, null, 2));
+' "$IF_TMP/manifest.json"
+
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -f webp,avif -o "$IF_TMP/manifest.json"
+```
+
+Pass criteria:
+
+- Exit code `1` and the error identifies the missing or stale manifest.
+- No manifest, output, cache, directory, or lock write occurs during the check.
+
+Restore generated state before continuing:
+
+```bash
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" \
+  -o "$IF_TMP/manifest.json" \
+  -f webp,avif \
+  --concurrency 2
+```
+
+Then corrupt a derivative without changing its byte length:
+
+```bash
+cp "$IF_TMP/input/hero.webp" "$IF_TMP/hero.webp.backup"
+node -e '
+  const fs = require("fs");
+  const file = process.argv[1];
+  const bytes = fs.readFileSync(file);
+  bytes[0] ^= 0xff;
+  fs.writeFileSync(file, bytes);
+' "$IF_TMP/input/hero.webp"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -f webp,avif -o "$IF_TMP/manifest.json"
+mv "$IF_TMP/hero.webp.backup" "$IF_TMP/input/hero.webp"
+```
+
+Pass criteria:
+
+- Exit code `1`; a same-size derivative mutation does not pass the SHA-256 freshness assertion.
+- No manifest, output, cache, directory, or lock write occurs during the check.
+
+Then corrupt the cache without changing the outputs or manifest:
+
+```bash
+cp "$IF_TMP/input/.imageforge-cache.json" "$IF_TMP/cache.backup.json"
+node -e 'require("fs").writeFileSync(process.argv[1], "{not-json")' \
+  "$IF_TMP/input/.imageforge-cache.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -f webp,avif -o "$IF_TMP/manifest.json"
+mv "$IF_TMP/cache.backup.json" "$IF_TMP/input/.imageforge-cache.json"
+```
+
+Pass criteria:
+
+- Exit code `1` and the error identifies a malformed or unsupported cache.
+- No output, manifest, directory, cache-lock, or cache repair write occurs during the check.
+
+### 4.6 `--check` needs-processing path
 
 Mutate one source image:
 
@@ -156,20 +251,27 @@ sharp(src)
   });
 NODE
 
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -o "$IF_TMP/manifest.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --check -f webp,avif -o "$IF_TMP/manifest.json"
 ```
 
 Pass criteria:
 
 - Exit code `1`.
-- Output includes an exact rerun command.
+- Output includes a generation command with the exact effective options. Missing/malformed cache
+  provenance adds an explicit inspect/remove-or-force recovery warning.
 
-### 4.6 `--no-cache` overwrite protection
+### 4.7 `--no-cache` overwrite protection
 
 ```bash
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --no-cache -o "$IF_TMP/no-cache.json"
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --no-cache -o "$IF_TMP/no-cache.json"
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --no-cache --force-overwrite -o "$IF_TMP/no-cache.json"
+mkdir -p "$IF_TMP/no-cache-input"
+cp "$IF_TMP/input/hero.jpg" "$IF_TMP/no-cache-input/hero.jpg"
+
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/no-cache-input" \
+  --no-cache --out-dir "$IF_TMP/no-cache-generated" -o "$IF_TMP/no-cache.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/no-cache-input" \
+  --no-cache --out-dir "$IF_TMP/no-cache-generated" -o "$IF_TMP/no-cache.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/no-cache-input" \
+  --no-cache --force-overwrite --out-dir "$IF_TMP/no-cache-generated" -o "$IF_TMP/no-cache.json"
 ```
 
 Pass criteria:
@@ -178,7 +280,7 @@ Pass criteria:
 - 2nd run: exit `1` with message explaining existing outputs + `--no-cache`.
 - 3rd run: exit `0`.
 
-### 4.7 `--out-dir` behavior
+### 4.8 `--out-dir` behavior
 
 ```bash
 node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" \
@@ -191,7 +293,7 @@ Pass criteria:
 - Outputs are written under `$IF_TMP/generated`.
 - Manifest output paths remain input-relative (can include `../` when out-dir is outside input root).
 
-### 4.8 JSON report mode
+### 4.9 JSON report mode
 
 ```bash
 node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" \
@@ -206,17 +308,41 @@ Pass criteria:
 - Exit code `0`.
 - Report is valid JSON with `summary` and `images`.
 
-### 4.9 Error-path sanity checks
+### 4.10 Deleted-final-source behavior
+
+Create a single-source workspace, generate it, remove the source, and run `--check`:
 
 ```bash
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/does-not-exist" -o "$IF_TMP/missing.json"
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --quality 0 -o "$IF_TMP/invalid-quality.json"
-node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --verbose --quiet -o "$IF_TMP/verbosity-conflict.json"
+mkdir -p "$IF_TMP/deleted-source"
+cp "$IF_TMP/input/hero.jpg" "$IF_TMP/deleted-source/hero.jpg"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/deleted-source" -o "$IF_TMP/deleted-manifest.json"
+rm "$IF_TMP/deleted-source/hero.jpg"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/deleted-source" --check -o "$IF_TMP/deleted-manifest.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/deleted-source" -o "$IF_TMP/deleted-manifest.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/deleted-source" --check -o "$IF_TMP/deleted-manifest.json"
 ```
 
 Pass criteria:
 
-- Each command exits `1`.
+- Check exits `1` because the non-empty manifest is stale.
+- A normal rerun writes an empty manifest and cache.
+- A subsequent check exits `0`.
+- Orphaned derivatives are reviewed and removed explicitly; ImageForge does not delete them.
+
+### 4.11 Error-path sanity checks
+
+```bash
+node -e 'require("fs").writeFileSync(process.argv[1], "")' "$IF_TMP/input/broken.jpg"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/does-not-exist" -o "$IF_TMP/missing.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" -o "$IF_TMP/corrupt-source.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --quality 0 -o "$IF_TMP/invalid-quality.json"
+node "$IF_ROOT/dist/cli.js" "$IF_TMP/input" --verbose --quiet -o "$IF_TMP/verbosity-conflict.json"
+rm "$IF_TMP/input/broken.jpg"
+```
+
+Pass criteria:
+
+- Each ImageForge command exits `1`.
 - Error messages clearly describe the invalid input/state.
 
 ## 5. Config Resolution Checks (Required)
@@ -224,7 +350,10 @@ Pass criteria:
 Create config file:
 
 ```bash
-cat > "$IF_TMP/input/imageforge.config.json" <<'JSON'
+mkdir -p "$IF_TMP/config-input"
+cp "$IF_TMP/input/hero.jpg" "$IF_TMP/config-input/hero.jpg"
+
+cat > "$IF_TMP/config-input/imageforge.config.json" <<'JSON'
 {
   "output": "from-config.json",
   "formats": ["webp", "avif"],
@@ -239,7 +368,7 @@ Run:
 
 ```bash
 (
-  cd "$IF_TMP/input" && \
+  cd "$IF_TMP/config-input" && \
   node "$IF_ROOT/dist/cli.js" . --output "$IF_TMP/from-cli.json" --quality 90 --verbose
 )
 ```
@@ -301,8 +430,8 @@ Pass criteria:
 
 Run section 2 and key items from sections 4-6 on:
 
-- Node `22` (required, minimum supported).
-- Node `24` (CI parity).
+- Node `20` (required minimum-version compatibility run).
+- Node `22` and Node `24` (supported compatibility runs).
 - At least one Linux host and one macOS host.
 - Windows shell smoke test (`--help`, simple run, path with spaces) if Windows users are expected.
 

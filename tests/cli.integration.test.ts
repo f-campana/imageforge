@@ -9,8 +9,9 @@ import sharp from "sharp";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.join(__dirname, "..");
-const FIXTURES = path.join(__dirname, "cli-fixtures");
-const OUTPUT = path.join(__dirname, "cli-test-output");
+const TEST_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-cli-integration-"));
+const FIXTURES = path.join(TEST_ROOT, "fixtures");
+const OUTPUT = path.join(TEST_ROOT, "output");
 const CLI = path.join(ROOT, "dist", "cli.js");
 const PACKAGE_VERSION = (
   JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8")) as { version: string }
@@ -133,9 +134,6 @@ async function createPng(
 }
 
 beforeAll(async () => {
-  fs.rmSync(FIXTURES, { recursive: true, force: true });
-  fs.rmSync(OUTPUT, { recursive: true, force: true });
-
   fs.mkdirSync(FIXTURES, { recursive: true });
   fs.mkdirSync(path.join(FIXTURES, "subdir"), { recursive: true });
   fs.mkdirSync(OUTPUT, { recursive: true });
@@ -204,21 +202,16 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  fs.rmSync(FIXTURES, { recursive: true, force: true });
-  fs.rmSync(OUTPUT, { recursive: true, force: true });
+  fs.rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 describe("CLI integration", () => {
-  const cliDir = path.join(__dirname, "cli-fixtures");
+  const cliDir = FIXTURES;
   const manifestPath = path.join(OUTPUT, "manifest.json");
 
   beforeAll(async () => {
     fs.rmSync(cliDir, { recursive: true, force: true });
     fs.mkdirSync(cliDir, { recursive: true });
     await createJpeg(path.join(cliDir, "test.jpg"), 400, 300, { r: 200, g: 100, b: 50 });
-  });
-
-  afterAll(() => {
-    fs.rmSync(cliDir, { recursive: true, force: true });
   });
 
   it("handles empty directories gracefully", () => {
@@ -536,10 +529,20 @@ describe("CLI integration", () => {
       fs.readFileSync(path.join(dir, ".imageforge-cache.json"), "utf-8")
     ) as {
       version: number;
-      entries: Record<string, unknown>;
+      entries: Record<
+        string,
+        { outputHashes?: Record<string, string>; generator?: string; blurHash?: string }
+      >;
     };
-    expect(cache.version).toBe(1);
+    expect(cache.version).toBe(2);
     expect(cache.entries["a.jpg"]).toBeDefined();
+    const digests = Object.values(cache.entries["a.jpg"].outputHashes ?? {});
+    expect(digests.length).toBeGreaterThan(0);
+    expect(digests.every((digest) => /^[a-f0-9]{64}$/u.test(digest))).toBe(true);
+    expect(cache.entries["a.jpg"].generator).toMatch(
+      /^imageforge:0\.1\.9;sharp:[^;]+;vips:[^;]+$/u
+    );
+    expect(cache.entries["a.jpg"].blurHash).toMatch(/^[a-f0-9]{64}$/u);
   });
 
   it("prunes cache entries for deleted source files", () => {
@@ -564,7 +567,7 @@ describe("CLI integration", () => {
       entries: Record<string, unknown>;
     };
 
-    expect(cache.version).toBe(1);
+    expect(cache.version).toBe(2);
     expect(Object.keys(cache.entries).sort()).toEqual(["a.jpg"]);
   });
 
@@ -684,7 +687,7 @@ describe("CLI integration", () => {
       version: number;
       entries: Record<string, unknown>;
     };
-    expect(cache.version).toBe(1);
+    expect(cache.version).toBe(2);
     expect(Object.keys(cache.entries)).toHaveLength(3);
 
     for (let index = 0; index < 3; index += 1) {
@@ -857,7 +860,7 @@ describe("CLI integration", () => {
     expect(result.stdout).toContain("All images up to date");
   });
 
-  it("--check fails with exact rerun command including effective options", async () => {
+  it("--check suggests a generation command including effective options", async () => {
     const dir = path.join(cliDir, "check-rerun");
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
@@ -866,28 +869,36 @@ describe("CLI integration", () => {
 
     const outDir = path.join(dir, "generated");
     const manifest = path.join(OUTPUT, "check-rerun.json");
-    const result = runCli([
-      dir,
-      "--check",
-      "-o",
-      manifest,
-      "--formats",
-      "webp,avif",
-      "--quality",
-      "70",
-      "--no-blur",
-      "--blur-size",
-      "8",
-      "--widths",
-      "120,240",
-      "--concurrency",
-      "3",
-      "--out-dir",
-      outDir,
-    ]);
+    const result = runCli(
+      [
+        dir,
+        "--check",
+        "-o",
+        manifest,
+        "--formats",
+        "webp,avif",
+        "--quality",
+        "70",
+        "--no-blur",
+        "--blur-size",
+        "8",
+        "--widths",
+        "120,240",
+        "--concurrency",
+        "3",
+        "--out-dir",
+        outDir,
+      ],
+      ROOT,
+      { npm_config_user_agent: "npm/11.4.2 node/v22" }
+    );
 
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain("Run: imageforge");
+    expect(result.stdout).toContain(
+      'Suggested command: npm exec --yes --package "@imageforge/cli@0.1.9" -- imageforge'
+    );
+    expect(result.stdout).not.toContain("npm exec -- imageforge");
+    expect(result.stdout).toContain("Cache provenance is unavailable");
     expect(result.stdout).toContain("--formats webp,avif");
     expect(result.stdout).toContain("--quality 70");
     expect(result.stdout).toContain("--no-blur");

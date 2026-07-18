@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { promises as fsp } from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
+import { assertSafeOutputParents, fromPosix, outputPathFor, toPosix } from "./output-paths.js";
 import {
   normalizeRequestedWidths,
   resolveEffectiveWidths,
@@ -11,6 +12,7 @@ import {
 import { LIMIT_INPUT_PIXELS } from "./shared.js";
 
 export type OutputFormat = "webp" | "avif";
+export { fromPosix, outputPathFor, toPosix } from "./output-paths.js";
 
 export interface ImageResult {
   file: string;
@@ -52,18 +54,54 @@ export function isImageFile(filePath: string): boolean {
   return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
-export function toPosix(filePath: string): string {
-  return filePath.replace(/\\/g, "/").split(path.sep).join("/");
-}
-
-export function fromPosix(filePath: string): string {
-  return filePath.split("/").join(path.sep);
-}
-
-export function outputPathFor(relativePath: string, format: OutputFormat, width?: number): string {
-  const parsed = path.posix.parse(toPosix(relativePath));
-  const widthSuffix = width === undefined ? "" : `.w${width.toString()}`;
-  return path.posix.join(parsed.dir, `${parsed.name}${widthSuffix}.${format}`);
+async function writeOutputAtomic(
+  outputFullPath: string,
+  outputDir: string,
+  outputBuffer: Buffer
+): Promise<void> {
+  assertSafeOutputParents(outputFullPath, outputDir);
+  await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
+  assertSafeOutputParents(outputFullPath, outputDir);
+  const suffix = `${process.pid.toString()}-${crypto.randomBytes(8).toString("hex")}`;
+  const tempPath = path.join(
+    path.dirname(outputFullPath),
+    `.${path.basename(outputFullPath)}.${suffix}.tmp`
+  );
+  await fsp.writeFile(tempPath, outputBuffer, { flag: "wx" });
+  try {
+    try {
+      await fsp.rename(tempPath, outputFullPath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST" && code !== "EPERM") throw error;
+      const backupPath = `${tempPath}.previous`;
+      try {
+        await fsp.rename(outputFullPath, backupPath);
+      } catch (moveError) {
+        if ((moveError as NodeJS.ErrnoException).code === "ENOENT") {
+          await fsp.rename(tempPath, outputFullPath);
+          return;
+        }
+        throw moveError;
+      }
+      try {
+        await fsp.rename(tempPath, outputFullPath);
+      } catch (replaceError) {
+        try {
+          await fsp.rename(backupPath, outputFullPath);
+        } catch (restoreError) {
+          throw new AggregateError(
+            [replaceError, restoreError],
+            `Failed to replace and restore output: ${outputFullPath}`
+          );
+        }
+        throw replaceError;
+      }
+      await fsp.rm(backupPath, { force: true });
+    }
+  } finally {
+    await fsp.rm(tempPath, { force: true });
+  }
 }
 
 export function discoverImages(
@@ -239,8 +277,7 @@ export async function processImage(
         size: outputBuffer.length,
       };
 
-      await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
-      await fsp.writeFile(outputFullPath, outputBuffer);
+      await writeOutputAtomic(outputFullPath, outputDir, outputBuffer);
       continue;
     }
 
@@ -263,8 +300,7 @@ export async function processImage(
       });
 
       // Write output file in the configured output root.
-      await fsp.mkdir(path.dirname(outputFullPath), { recursive: true });
-      await fsp.writeFile(outputFullPath, outputBuffer);
+      await writeOutputAtomic(outputFullPath, outputDir, outputBuffer);
     }
 
     result.variants ??= {};

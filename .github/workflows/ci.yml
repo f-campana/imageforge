@@ -94,6 +94,39 @@ jobs:
       - name: Build
         run: pnpm run build
 
+  windows-smoke:
+    name: Windows Smoke (Node 22)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck, lint, and verify formatting
+        run: pnpm run typecheck && pnpm run lint && pnpm run format:check
+
+      - name: Run portable core tests
+        run: pnpm exec vitest run --exclude tests/fault-injection.pilot.test.ts --exclude tests/benchmark-tools.test.ts --exclude tests/packaged-install.e2e.test.ts
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run packaged install E2E
+        run: pnpm exec vitest run tests/packaged-install.e2e.test.ts
+
   e2e-packaged-install:
     name: E2E Packaged Install (Node ${{ matrix.node }})
     runs-on: ubuntu-latest

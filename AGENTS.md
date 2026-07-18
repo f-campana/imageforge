@@ -9,7 +9,7 @@ ESM entrypoints and CommonJS compatibility under `dist/cjs/`.
 
 ## Tech Stack
 
-- Runtime: Node.js `>=22`
+- Runtime: Node.js `>=20`
 - Package manager: `pnpm` (`packageManager: pnpm@10.28.2`)
 - Language/build: TypeScript (`tsc`)
 - CLI/runtime libs: `commander`, `chalk`, `sharp`, `p-limit`

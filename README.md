@@ -63,10 +63,16 @@ npm install -g @imageforge/cli
 Run without global install:
 
 ```bash
-npx @imageforge/cli ./public/images
+npx @imageforge/cli ./public/images --dry-run
 ```
 
 ## Quick Start
+
+```bash
+imageforge ./public/images --dry-run
+```
+
+Review the preview, then apply the same command without `--dry-run`:
 
 ```bash
 imageforge ./public/images
@@ -115,7 +121,7 @@ imageforge <directory> [options]
 | `--widths <list>`                            | Requested width targets as comma-separated integers (source-bounded, max 16 unique) |
 | `--cache` / `--no-cache`                     | Enable/disable cache reads/writes                                                   |
 | `--force-overwrite` / `--no-force-overwrite` | Allow/disallow overwriting existing outputs                                         |
-| `--check` / `--no-check`                     | Check mode for CI (exit `1` if processing is needed)                                |
+| `--check` / `--no-check`                     | Check outputs + cache + manifest for CI (exit `1` when stale)                       |
 | `--dry-run` / `--no-dry-run`                 | Preview processing without writing outputs, manifest, or cache                      |
 | `--include <pattern>`                        | Include input-relative glob pattern (repeatable or comma-separated)                 |
 | `--exclude <pattern>`                        | Exclude input-relative glob pattern (repeatable or comma-separated)                 |
@@ -131,12 +137,19 @@ imageforge <directory> [options]
 ## Runtime Behavior
 
 - Normal runs exit with code `1` if any file fails processing.
-- `--check` exits `1` when at least one file needs processing, otherwise `0`.
+- `--check` exits `1` when a source needs processing or the cache/manifest is missing, invalid, or stale; otherwise it exits `0`.
 - Symlinks are skipped during discovery.
 - Output collision checks are case-insensitive.
 - Existing outputs are protected unless explicitly overwritten with `--force-overwrite`.
-- With `--check`, ImageForge prints an exact copy-pastable rerun command.
-- `--dry-run` previews which images would be processed but performs no writes.
+- With `--check`, ImageForge prints a generation command matching the effective options. The CLI
+  detects npm, pnpm, Yarn, or Bun invocations. It uses the exact project-installed version when
+  present; otherwise the hint names the exact scoped package and version, never the unrelated
+  unscoped `imageforge` package. Treat
+  `rerunCommand` as a shell-dependent hint and keep the canonical invocation in a package script.
+  If cache provenance is missing or malformed, inspect existing derivatives before removing
+  conflicts or adding `--force-overwrite` intentionally.
+- `--dry-run` previews which images would be processed but performs no output, manifest, cache,
+  directory, or lock writes.
 - `--check` and `--dry-run` cannot be used together.
 - Responsive width sets are opt-in via `--widths` (default behavior is unchanged).
 - Requested widths are targets; generated effective widths may be smaller for source-bounded runs.
@@ -204,7 +217,10 @@ The report includes:
 - Per-image status (`processed`, `cached`, `failed`, `needs-processing`)
 - Effective generated widths in `images[*].variants[*].width` when `--widths` is used
 - Summary counters and size totals
-- Rerun command hint for `--check` failures
+- Non-fatal warnings, including cache-owned derivatives made obsolete by a formats, widths, or
+  output-contract change
+- Effective-option generation hint for `--check` failures, with protected recovery when cache
+  provenance is unavailable
 
 ## Manifest
 
@@ -257,25 +273,58 @@ Notes:
 
 ```ts
 import manifest from "./imageforge.json";
+import type { ImageForgeEntry } from "@imageforge/cli";
 
-type Manifest = typeof manifest;
+const images = manifest.images as Record<string, ImageForgeEntry>;
 
-export function getImageData(src: string) {
-  return (manifest as Manifest).images[src];
+export function getImageData(src: string): ImageForgeEntry {
+  const image = images[src];
+  if (!image) throw new Error(`ImageForge manifest entry not found: ${src}`);
+  return image;
+}
+
+function joinPublicPath(base: string, outputPath: string): string {
+  return `${base.replace(/\/?$/, "/")}${outputPath}`;
+}
+
+export function getImageUrl(src: string, format: "webp" | "avif", publicBase = "/images/"): string {
+  const output = getImageData(src).outputs[format];
+  if (!output) throw new Error(`ImageForge ${format} output not found: ${src}`);
+  return joinPublicPath(publicBase, output.path);
 }
 ```
 
-Then use:
+Then serve a generated derivative. When `./public/images` is the input directory, manifest output
+paths are relative to `/images/`:
 
-- Original source path for `src`
-- `getImageData(src)?.blurDataURL` for `placeholder="blur"`
+```tsx
+import Image from "next/image";
+
+const hero = getImageData("hero.jpg");
+
+<Image
+  src={getImageUrl("hero.jpg", "webp")}
+  width={hero.width}
+  height={hero.height}
+  alt="Product screenshot"
+  placeholder="blur"
+  blurDataURL={hero.blurDataURL}
+  unoptimized
+/>;
+```
+
+`unoptimized` is intentional: it serves ImageForge's pre-generated file instead of sending it
+through the Next.js runtime image optimizer again. For art direction or multiple formats, render a
+native `<picture>` using manifest variants and an accurate `sizes` attribute.
 
 Optional `srcset` helper for responsive variants:
 
 ```ts
-export function getSrcSet(src: string, format: "webp" | "avif") {
-  const variants = (manifest as Manifest).images[src]?.variants?.[format];
-  return variants?.map((variant) => `${variant.path} ${variant.width}w`).join(", ");
+export function getSrcSet(src: string, format: "webp" | "avif", publicBase = "/images/") {
+  const variants = getImageData(src).variants?.[format];
+  return variants
+    ?.map((variant) => `${joinPublicPath(publicBase, variant.path)} ${variant.width}w`)
+    .join(", ");
 }
 ```
 
@@ -320,11 +369,45 @@ Notes:
 
 ## CI Mode
 
-Use check mode in CI to fail when assets are out of date:
+Install ImageForge as a pinned project dependency so CI uses the version recorded in your lockfile:
 
 ```bash
-imageforge ./public/images --check
+pnpm add --save-dev --save-exact @imageforge/cli
 ```
+
+Add repeatable scripts:
+
+```json
+{
+  "scripts": {
+    "images:build": "imageforge ./public/images --formats webp,avif --widths 320,640,960,1280",
+    "images:check": "imageforge ./public/images --formats webp,avif --widths 320,640,960,1280 --check"
+  }
+}
+```
+
+Commit the manifest, cache, and generated derivatives, then verify them after a frozen install:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm run images:check
+```
+
+`--check` is read-only and fails if an input needs processing or the checked-in cache/manifest is
+missing, invalid, or stale. Its failure output includes a build command with the effective options.
+Review shell quoting before running it, especially for include/exclude patterns containing spaces or
+shell metacharacters.
+Cache v2 verifies derivative/blur-metadata SHA-256 digests and generator identity; run one unfiltered
+regeneration after a v1/legacy cache or ImageForge, Sharp, or libvips change so every entry gets
+current integrity metadata.
+
+See the focused guides for
+[CI and generated assets](https://github.com/f-campana/imageforge/blob/main/docs/guides/ci.md),
+[manifest semantics](https://github.com/f-campana/imageforge/blob/main/docs/guides/manifest.md), and
+[Next.js delivery](https://github.com/f-campana/imageforge/blob/main/docs/guides/nextjs.md), plus
+[installation and generated-state troubleshooting](https://github.com/f-campana/imageforge/blob/main/docs/guides/troubleshooting.md).
+These absolute links remain useful from the npm package page. The focused guides are intentionally
+not bundled in the package tarball.
 
 ## Benchmarking
 

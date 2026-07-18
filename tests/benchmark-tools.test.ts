@@ -9,6 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ROOT = path.join(__dirname, "..");
+const PACKAGE_VERSION = (
+  JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 const COMPARE = path.join(ROOT, "scripts", "bench", "compare-benchmark.mjs");
 const EXPORT_SNAPSHOT = path.join(ROOT, "scripts", "bench", "export-site-snapshot.mjs");
 const FETCH_SOURCES = path.join(ROOT, "scripts", "bench", "fetch-sources.mjs");
@@ -463,7 +468,7 @@ describe("benchmark contract validators", () => {
         "--headline-scenario",
         "batch-all",
       ],
-      { encoding: "utf-8" }
+      { cwd: tempDir, encoding: "utf-8" }
     );
 
     expect(result.status).toBe(0);
@@ -472,6 +477,7 @@ describe("benchmark contract validators", () => {
       schemaVersion: string;
       snapshotId: string;
       summary: { alertCount: number };
+      source: { cliVersion: string };
     };
 
     const contractsPath = path.join(ROOT, "scripts", "bench", "contracts.mjs");
@@ -483,6 +489,23 @@ describe("benchmark contract validators", () => {
     expect(snapshot.schemaVersion).toBe("1.0");
     expect(snapshot.snapshotId).toBe("12345.1");
     expect(snapshot.summary.alertCount).toBe(0);
+    expect(snapshot.source.cliVersion).toBe(PACKAGE_VERSION);
+  });
+
+  it("accepts legacy snapshots and rejects a blank optional CLI version", async () => {
+    const contractsPath = path.join(ROOT, "scripts", "bench", "contracts.mjs");
+    const contracts = (await import(pathToFileURL(contractsPath).href)) as {
+      validateSiteSnapshot: (value: unknown) => string[];
+    };
+    const legacySnapshot = makeSiteSnapshot();
+
+    expect(contracts.validateSiteSnapshot(legacySnapshot)).toHaveLength(0);
+    expect(
+      contracts.validateSiteSnapshot({
+        ...legacySnapshot,
+        source: { ...legacySnapshot.source, cliVersion: "" },
+      })
+    ).toContain("source.cliVersion must be a non-empty string when provided.");
   });
 });
 

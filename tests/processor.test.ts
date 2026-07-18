@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as crypto from "crypto";
 import * as fs from "fs";
+import { promises as fsp } from "fs";
+import * as os from "node:os";
 import * as path from "path";
-import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import {
   convertImage,
@@ -17,10 +18,9 @@ import {
 } from "../src/processor.js";
 import { resolveOrientedDimensions } from "../src/responsive.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const FIXTURES = path.join(__dirname, "processor-fixtures");
-const OUTPUT = path.join(__dirname, "processor-test-output");
+const TEST_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-processor-"));
+const FIXTURES = path.join(TEST_ROOT, "fixtures");
+const OUTPUT = path.join(TEST_ROOT, "output");
 
 function makeNoiseImage(width: number, height: number): Promise<Buffer> {
   const raw = crypto.randomBytes(width * height * 3);
@@ -66,9 +66,6 @@ async function createPng(
 }
 
 beforeAll(async () => {
-  fs.rmSync(FIXTURES, { recursive: true, force: true });
-  fs.rmSync(OUTPUT, { recursive: true, force: true });
-
   fs.mkdirSync(FIXTURES, { recursive: true });
   fs.mkdirSync(path.join(FIXTURES, "subdir"), { recursive: true });
   fs.mkdirSync(OUTPUT, { recursive: true });
@@ -137,8 +134,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  fs.rmSync(FIXTURES, { recursive: true, force: true });
-  fs.rmSync(OUTPUT, { recursive: true, force: true });
+  fs.rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 describe("isImageFile", () => {
   it("recognizes supported extensions case-insensitively", () => {
@@ -472,7 +468,7 @@ describe("processImage", () => {
     );
 
     expect(result.outputs.webp.path).toBe(
-      path.posix.join("..", "processor-test-output", "processor-out", "subdir", "nested.webp")
+      toPosix(path.relative(FIXTURES, path.join(outDir, "subdir", "nested.webp")))
     );
     expect(fs.existsSync(path.join(outDir, "subdir", "nested.webp"))).toBe(true);
   });
@@ -591,6 +587,327 @@ describe("processImage", () => {
 
     fs.rmSync(hugePath, { force: true });
     fs.rmSync(path.join(FIXTURES, "huge-limit.webp"), { force: true });
+  });
+
+  it.runIf(process.platform !== "win32")(
+    "replaces an output symlink without modifying its external target",
+    async () => {
+      const root = path.join(OUTPUT, "processor-output-symlink");
+      const inputDir = path.join(root, "input");
+      const outputDir = path.join(root, "generated");
+      const source = path.join(inputDir, "photo.jpg");
+      const output = path.join(outputDir, "photo.webp");
+      const externalTarget = path.join(root, "external.webp");
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.mkdirSync(inputDir, { recursive: true });
+      fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+
+      await processImage(
+        source,
+        inputDir,
+        { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+        outputDir
+      );
+      fs.copyFileSync(output, externalTarget);
+      const externalBefore = fs.readFileSync(externalTarget);
+      fs.rmSync(output);
+      fs.symlinkSync(externalTarget, output);
+
+      await processImage(
+        source,
+        inputDir,
+        { formats: ["webp"], quality: 70, blur: false, blurSize: 4 },
+        outputDir
+      );
+      expect(fs.lstatSync(output).isSymbolicLink()).toBe(false);
+      expect(fs.readFileSync(externalTarget)).toEqual(externalBefore);
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  );
+
+  it.each(["EEXIST", "EPERM"])(
+    "uses the replacement fallback when rename reports %s",
+    async (code) => {
+      const root = path.join(OUTPUT, `processor-rename-${code.toLowerCase()}`);
+      const inputDir = path.join(root, "input");
+      const outputDir = path.join(root, "generated");
+      const source = path.join(inputDir, "photo.jpg");
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.mkdirSync(inputDir, { recursive: true });
+      fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+      await processImage(
+        source,
+        inputDir,
+        { formats: ["webp"], quality: 70, blur: false, blurSize: 4 },
+        outputDir
+      );
+      const renameError = Object.assign(new Error(`simulated ${code}`), { code });
+      const renameSpy = vi.spyOn(fsp, "rename").mockRejectedValueOnce(renameError);
+
+      try {
+        await processImage(
+          source,
+          inputDir,
+          { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+          outputDir
+        );
+        expect(fs.statSync(path.join(outputDir, "photo.webp")).isFile()).toBe(true);
+        expect(renameSpy).toHaveBeenCalledTimes(3);
+      } finally {
+        renameSpy.mockRestore();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it("restores the previous output when the replacement rename fails", async () => {
+    const root = path.join(OUTPUT, "processor-rename-rollback");
+    const inputDir = path.join(root, "input");
+    const outputDir = path.join(root, "generated");
+    const source = path.join(inputDir, "photo.jpg");
+    const output = path.join(outputDir, "photo.webp");
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+    await processImage(
+      source,
+      inputDir,
+      { formats: ["webp"], quality: 70, blur: false, blurSize: 4 },
+      outputDir
+    );
+    const previous = fs.readFileSync(output);
+    const realRename = fsp.rename.bind(fsp);
+    let renameCall = 0;
+    const renameSpy = vi.spyOn(fsp, "rename").mockImplementation(async (from, to) => {
+      renameCall += 1;
+      if (renameCall === 1) {
+        throw Object.assign(new Error("simulated EPERM"), { code: "EPERM" });
+      }
+      if (renameCall === 3) {
+        throw Object.assign(new Error("simulated EIO"), { code: "EIO" });
+      }
+      await realRename(from, to);
+    });
+
+    try {
+      await expect(
+        processImage(
+          source,
+          inputDir,
+          { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+          outputDir
+        )
+      ).rejects.toThrow("simulated EIO");
+      expect(fs.readFileSync(output)).toEqual(previous);
+      expect(fs.readdirSync(outputDir).filter((name) => name.includes(".tmp"))).toEqual([]);
+      expect(renameSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      renameSpy.mockRestore();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("retries the replacement when the previous output disappears before backup", async () => {
+    const root = path.join(OUTPUT, "processor-rename-disappeared");
+    const inputDir = path.join(root, "input");
+    const outputDir = path.join(root, "generated");
+    const source = path.join(inputDir, "photo.jpg");
+    const output = path.join(outputDir, "photo.webp");
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+    await processImage(
+      source,
+      inputDir,
+      { formats: ["webp"], quality: 70, blur: false, blurSize: 4 },
+      outputDir
+    );
+    const realRename = fsp.rename.bind(fsp);
+    let renameCall = 0;
+    const renameSpy = vi.spyOn(fsp, "rename").mockImplementation(async (from, to) => {
+      renameCall += 1;
+      if (renameCall === 1) {
+        throw Object.assign(new Error("simulated EPERM"), { code: "EPERM" });
+      }
+      if (renameCall === 2) {
+        fs.rmSync(from, { force: true });
+        throw Object.assign(new Error("simulated ENOENT"), { code: "ENOENT" });
+      }
+      await realRename(from, to);
+    });
+
+    try {
+      await processImage(
+        source,
+        inputDir,
+        { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+        outputDir
+      );
+      expect(fs.statSync(output).isFile()).toBe(true);
+      expect(renameSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      renameSpy.mockRestore();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves the backup and both causes when replacement and restore fail", async () => {
+    const root = path.join(OUTPUT, "processor-rename-restore-failure");
+    const inputDir = path.join(root, "input");
+    const outputDir = path.join(root, "generated");
+    const source = path.join(inputDir, "photo.jpg");
+    const output = path.join(outputDir, "photo.webp");
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+    await processImage(
+      source,
+      inputDir,
+      { formats: ["webp"], quality: 70, blur: false, blurSize: 4 },
+      outputDir
+    );
+    const previous = fs.readFileSync(output);
+    const realRename = fsp.rename.bind(fsp);
+    let renameCall = 0;
+    const renameSpy = vi.spyOn(fsp, "rename").mockImplementation(async (from, to) => {
+      renameCall += 1;
+      if (renameCall === 1) {
+        throw Object.assign(new Error("simulated EPERM"), { code: "EPERM" });
+      }
+      if (renameCall === 3) {
+        throw Object.assign(new Error("simulated replacement EIO"), { code: "EIO" });
+      }
+      if (renameCall === 4) {
+        throw Object.assign(new Error("simulated restore EACCES"), { code: "EACCES" });
+      }
+      await realRename(from, to);
+    });
+
+    try {
+      const error = await processImage(
+        source,
+        inputDir,
+        { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+        outputDir
+      ).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(AggregateError);
+      expect((error as AggregateError).errors).toHaveLength(2);
+      expect(fs.existsSync(output)).toBe(false);
+      const backups = fs.readdirSync(outputDir).filter((name) => name.endsWith(".tmp.previous"));
+      expect(backups).toHaveLength(1);
+      expect(fs.readFileSync(path.join(outputDir, backups[0]))).toEqual(previous);
+      expect(renameSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      renameSpy.mockRestore();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("propagates unexpected rename failures and removes its temporary file", async () => {
+    const root = path.join(OUTPUT, "processor-rename-failure");
+    const inputDir = path.join(root, "input");
+    const outputDir = path.join(root, "generated");
+    const source = path.join(inputDir, "photo.jpg");
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+    const renameError = Object.assign(new Error("simulated EIO"), { code: "EIO" });
+    const renameSpy = vi.spyOn(fsp, "rename").mockRejectedValueOnce(renameError);
+
+    try {
+      await expect(
+        processImage(
+          source,
+          inputDir,
+          { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+          outputDir
+        )
+      ).rejects.toThrow("simulated EIO");
+      expect(fs.readdirSync(outputDir)).toEqual([]);
+    } finally {
+      renameSpy.mockRestore();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.runIf(process.platform !== "win32")(
+    "refuses to write through a symlinked output directory",
+    async () => {
+      const root = path.join(OUTPUT, "processor-parent-symlink");
+      const inputDir = path.join(root, "input");
+      const nestedInput = path.join(inputDir, "nested");
+      const outputDir = path.join(root, "generated");
+      const externalDir = path.join(root, "external");
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.mkdirSync(nestedInput, { recursive: true });
+      fs.mkdirSync(outputDir, { recursive: true });
+      fs.mkdirSync(externalDir, { recursive: true });
+      const source = path.join(nestedInput, "photo.jpg");
+      fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+      fs.symlinkSync(externalDir, path.join(outputDir, "nested"));
+
+      await expect(
+        processImage(
+          source,
+          inputDir,
+          { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+          outputDir
+        )
+      ).rejects.toThrow("symlinked output directory");
+      expect(fs.existsSync(path.join(externalDir, "photo.webp"))).toBe(false);
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "refuses to write through a symlinked output root",
+    async () => {
+      const root = path.join(OUTPUT, "processor-symlink-root");
+      const inputDir = path.join(root, "input");
+      const external = path.join(root, "external");
+      const outputDir = path.join(root, "generated");
+      const source = path.join(inputDir, "photo.jpg");
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.mkdirSync(inputDir, { recursive: true });
+      fs.mkdirSync(external, { recursive: true });
+      fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+      fs.symlinkSync(external, outputDir);
+
+      try {
+        await expect(
+          processImage(
+            source,
+            inputDir,
+            { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+            outputDir
+          )
+        ).rejects.toThrow("symlinked output root");
+        expect(fs.readdirSync(external)).toEqual([]);
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it("refuses to resolve a direct API source outside the declared input root", async () => {
+    const root = path.join(OUTPUT, "processor-outside-root");
+    const inputDir = path.join(root, "input");
+    const outputDir = path.join(root, "generated");
+    const source = path.join(root, "photo.jpg");
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.copyFileSync(path.join(FIXTURES, "photo.jpg"), source);
+
+    await expect(
+      processImage(
+        source,
+        inputDir,
+        { formats: ["webp"], quality: 80, blur: false, blurSize: 4 },
+        outputDir
+      )
+    ).rejects.toThrow("outside the configured output root");
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });
 

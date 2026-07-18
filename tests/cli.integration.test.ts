@@ -23,13 +23,20 @@ interface CliRunResult {
   stderr: string;
 }
 
+function commandEnv(extraEnv: Record<string, string>): NodeJS.ProcessEnv {
+  const overriddenKeys = new Set(Object.keys(extraEnv).map((key) => key.toUpperCase()));
+  return {
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !overriddenKeys.has(key.toUpperCase()))
+    ),
+    ...extraEnv,
+  };
+}
+
 function runCli(args: string[], cwd = ROOT, extraEnv: Record<string, string> = {}): CliRunResult {
   const result = spawnSync("node", [CLI, ...args], {
     cwd,
-    env: {
-      ...process.env,
-      ...extraEnv,
-    },
+    env: commandEnv(extraEnv),
     encoding: "utf-8",
   });
 
@@ -52,10 +59,7 @@ function runCliAsync(
   return new Promise((resolve, reject) => {
     const child = spawn("node", [CLI, ...args], {
       cwd,
-      env: {
-        ...process.env,
-        ...extraEnv,
-      },
+      env: commandEnv(extraEnv),
       stdio: ["ignore", "pipe", "pipe"],
     });
 

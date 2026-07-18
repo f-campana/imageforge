@@ -52,23 +52,36 @@ export function resolveOutputPaths(
 export function inspectOutputRoot(outputDir: string): OutputRootState {
   const logicalRoot = path.resolve(outputDir);
   let cursor = logicalRoot;
-  let rootIsMissing = false;
+  let rootState: OutputRootState | undefined;
 
   for (;;) {
     try {
       const stat = fs.lstatSync(cursor);
-      if (stat.isSymbolicLink()) return "symlink";
+      if (stat.isSymbolicLink()) {
+        const parent = path.dirname(cursor);
+        // macOS exposes root-owned aliases such as /var -> /private/var. Treat only these
+        // filesystem-root entries as trusted; every project-controlled ancestor remains unsafe.
+        if (parent !== path.parse(cursor).root) return "symlink";
+        if (rootState === undefined) {
+          const targetStat = fs.statSync(cursor);
+          if (!targetStat.isDirectory()) return "other";
+          rootState = "directory";
+        }
+        cursor = parent;
+        continue;
+      }
       if (!stat.isDirectory()) return "other";
-      return rootIsMissing ? "missing" : "directory";
+      rootState ??= "directory";
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOTDIR") return "other";
       if (code !== "ENOENT") throw error;
-      rootIsMissing = true;
-      const parent = path.dirname(cursor);
-      if (parent === cursor) return "missing";
-      cursor = parent;
+      rootState ??= "missing";
     }
+
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return rootState;
+    cursor = parent;
   }
 }
 

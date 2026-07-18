@@ -134,6 +134,25 @@ describe("canonical output paths", () => {
     }
   );
 
+  it.runIf(process.platform !== "win32")(
+    "rejects an existing output root below a symlinked ancestor",
+    () => {
+      const { root } = workspace();
+      const external = path.join(root, "external");
+      const existingRoot = path.join(external, "generated");
+      fs.mkdirSync(existingRoot, { recursive: true });
+      const parentLink = path.join(root, "public");
+      fs.symlinkSync(external, parentLink);
+      const linkedRoot = path.join(parentLink, "generated");
+
+      expect(inspectOutputRoot(linkedRoot)).toBe("symlink");
+      expect(() => {
+        assertSafeOutputParents(path.join(linkedRoot, "hero.webp"), linkedRoot);
+      }).toThrow("symlinked output root");
+      expect(fs.existsSync(path.join(existingRoot, "hero.webp"))).toBe(false);
+    }
+  );
+
   it("rejects a regular file used as an output parent", () => {
     const { outputDir } = workspace();
     const parent = path.join(outputDir, "not-a-directory");

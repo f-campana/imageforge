@@ -120,6 +120,42 @@ describe("runner direct contract", () => {
     expect(checked.report.errors).toEqual([]);
   });
 
+  it.runIf(process.platform !== "win32")(
+    "preserves generated state when discovery cannot read a cached source subtree",
+    async () => {
+      const paths = fixture();
+      const restrictedDir = path.join(paths.inputDir, "restricted");
+      const source = path.join(restrictedDir, "hero.jpg");
+      fs.mkdirSync(restrictedDir);
+      await writeJpeg(source);
+
+      const generated = await runImageforge(options(paths));
+      expect(generated.exitCode).toBe(0);
+      const cachePath = path.join(paths.outputDir, ".imageforge-cache.json");
+      const derivative = generated.manifest?.images["restricted/hero.jpg"]?.outputs.webp.path;
+      expect(derivative).toBeDefined();
+      const originalCache = fs.readFileSync(cachePath);
+      const originalManifest = fs.readFileSync(paths.manifestPath);
+
+      fs.chmodSync(restrictedDir, 0o000);
+      try {
+        const incomplete = await runImageforge(options(paths));
+
+        expect(incomplete.exitCode).toBe(1);
+        expect(incomplete.manifest).toBeNull();
+        expect(incomplete.report.errors).toHaveLength(1);
+        expect(incomplete.report.errors[0]?.code).toBe("DISCOVERY_WARNING");
+        expect(incomplete.report.errors[0]?.file).toContain("restricted");
+        expect(fs.readFileSync(cachePath)).toEqual(originalCache);
+        expect(fs.readFileSync(paths.manifestPath)).toEqual(originalManifest);
+        expect(fs.existsSync(path.resolve(paths.inputDir, derivative ?? ""))).toBe(true);
+        expect(fs.existsSync(`${cachePath}.lock`)).toBe(false);
+      } finally {
+        fs.chmodSync(restrictedDir, 0o755);
+      }
+    }
+  );
+
   it("fails check closed after derivative corruption and supplies a reproducible rerun", async () => {
     const paths = fixture();
     await writeJpeg(path.join(paths.inputDir, "hero.jpg"));

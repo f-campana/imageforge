@@ -322,6 +322,14 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       printError(chalk.yellow(`Warning: ${warningMessage}`));
     }
 
+    if (discoveryWarnings.length > 0) {
+      const message =
+        "Image discovery was incomplete; generated state was left unchanged. Restore access and rerun ImageForge.";
+      printError(chalk.red(message));
+      report.summary.durationMs = Date.now() - startTime;
+      return { exitCode: 1, report, manifest: null };
+    }
+
     if (images.length === 0) {
       const message =
         filteredOutCount > 0

@@ -138,7 +138,9 @@ describe("cache atomic writes", () => {
           verbose: false,
           quiet: false,
         })
-      ).rejects.toThrow("EISDIR");
+      ).rejects.toSatisfy(
+        (error: NodeJS.ErrnoException) => error.code === "EISDIR" || error.code === "EPERM"
+      );
     } finally {
       const leakedTemps = fs
         .readdirSync(inputDir)

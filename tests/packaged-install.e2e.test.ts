@@ -19,17 +19,25 @@ interface CommandResult {
   stderr: string;
 }
 
+function quoteWindowsCommandArgument(argument: string): string {
+  if (/[\0\r\n"]/.test(argument)) {
+    throw new Error("Windows command arguments must not contain NUL, line breaks, or quotes");
+  }
+  return `"${argument}"`;
+}
+
 function runCommand(
   command: string,
   args: string[],
   cwd: string,
   extraEnv: Record<string, string> = {}
 ): CommandResult {
-  const executable =
-    process.platform === "win32" && ["npm", "npx", "pnpm"].includes(command)
-      ? `${command}.cmd`
-      : command;
-  const result = spawnSync(executable, args, {
+  const windowsShim = process.platform === "win32" && ["npm", "npx", "pnpm"].includes(command);
+  const executable = windowsShim ? (process.env.ComSpec ?? "cmd.exe") : command;
+  const executableArgs = windowsShim
+    ? ["/d", "/s", "/c", `${command}.cmd ${args.map(quoteWindowsCommandArgument).join(" ")}`]
+    : args;
+  const result = spawnSync(executable, executableArgs, {
     cwd,
     env: {
       ...process.env,

@@ -121,11 +121,11 @@ jobs:
         # which makes Prettier report the entire tree without testing portability.
         run: pnpm run typecheck && pnpm run lint
 
-      - name: Run portable core tests
-        run: pnpm exec vitest run --exclude tests/fault-injection.pilot.test.ts --exclude tests/benchmark-tools.test.ts --exclude tests/packaged-install.e2e.test.ts
-
       - name: Build
         run: pnpm run build
+
+      - name: Run portable core tests
+        run: pnpm exec vitest run --exclude tests/fault-injection.pilot.test.ts --exclude tests/benchmark-tools.test.ts --exclude tests/packaged-install.e2e.test.ts
 
       - name: Run packaged install E2E
         run: pnpm exec vitest run tests/packaged-install.e2e.test.ts

@@ -57,9 +57,9 @@ describe("canonical output paths", () => {
   });
 
   it("does not collapse unexpected root inspection errors into missing state", () => {
-    const overlongRoot = path.join(os.tmpdir(), "x".repeat(1024));
-    expect(() => inspectOutputRoot(overlongRoot)).toThrow(
-      expect.objectContaining({ code: "ENAMETOOLONG" })
+    const invalidRoot = path.join(os.tmpdir(), "invalid\0root");
+    expect(() => inspectOutputRoot(invalidRoot)).toThrow(
+      expect.objectContaining({ code: "ERR_INVALID_ARG_VALUE" })
     );
   });
 

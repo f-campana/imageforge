@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.10](https://github.com/f-campana/imageforge/compare/v0.1.9...v0.1.10) (2026-07-19)
+
+
+### Features
+
+* make ImageForge safe to trial and enforce in CI ([e94f628](https://github.com/f-campana/imageforge/commit/e94f628ebda179a13a6a292cb9248bd8d25d2697))
+
+  * `--dry-run` and `--check` are filesystem-pure: they do not create derivatives, manifests, caches, or lock files. `--check` now validates generated manifests and reports a reproducible command when state is stale.
+  * Cache schema v2 records generator identity plus SHA-256 digests for derivatives and blur placeholders. Existing v1 caches remain readable as migration input, but entries without complete provenance are not trusted for overwrite ownership.
+  * Discovery, cache locking, and atomic output replacement fail closed around unreadable paths, symlinked ancestors, replaced lock paths, and interrupted writes, with recovery guidance instead of silent pruning or overwrite.
+  * Node 20, 22, and 24, Windows packaged installs, and both ESM and CommonJS exports remain covered. No public CLI flag or package export was removed; users with unowned existing derivatives may need to inspect/remove conflicts or opt in with `--force-overwrite`.
+
+
+### Bug Fixes
+
+* **ci:** build before advisory test suites ([9858bb9](https://github.com/f-campana/imageforge/commit/9858bb98562a1fdbec026b4c5dc23a30498bccfc))
+
 ## [0.1.9](https://github.com/f-campana/imageforge/compare/v0.1.8...v0.1.9) (2026-06-04)
 
 

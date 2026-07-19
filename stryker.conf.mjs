@@ -1,7 +1,7 @@
 /** @type {import("@stryker-mutator/api/core").PartialStrykerOptions} */
 const config = {
   plugins: ["@stryker-mutator/vitest-runner"],
-  mutate: ["src/glob.ts", "src/shared.ts"],
+  mutate: ["src/glob.ts", "src/shared.ts", "src/runner/manifest.ts"],
   testRunner: "vitest",
   coverageAnalysis: "off",
   reporters: ["clear-text", "progress", "html", "json"],

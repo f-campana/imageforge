@@ -9,6 +9,7 @@ import { ConfigError, loadConfig, type ImageForgeConfig } from "./config.js";
 import { normalizeGlobPattern } from "./glob.js";
 import { toPosix, type OutputFormat } from "./processor.js";
 import { MAX_WIDTH, MAX_WIDTH_COUNT, MIN_WIDTH } from "./responsive.js";
+import { resolveProjectCommandPrefix } from "./rerun-prefix.js";
 import { getDefaultConcurrency, runImageforge } from "./runner.js";
 import { isRecord } from "./shared.js";
 
@@ -392,7 +393,7 @@ const defaultConcurrency = getDefaultConcurrency();
 
 program
   .name("imageforge")
-  .description("Image optimization pipeline for Next.js developers")
+  .description("Build-time responsive image pipeline for web apps")
   .version(packageVersion);
 
 program
@@ -435,7 +436,7 @@ program
   .option("--no-cache", "Disable file hash caching")
   .option("--force-overwrite", "Allow overwriting existing output files")
   .option("--no-force-overwrite", "Disable overwrite mode")
-  .option("--check", "Check mode: exit 1 if unprocessed images exist")
+  .option("--check", "Check mode: exit 1 if outputs, cache, or manifest are stale")
   .option("--no-check", "Disable check mode")
   .option("--dry-run", "Preview work without writing outputs, manifest, or cache")
   .option("--no-dry-run", "Disable dry-run mode")
@@ -485,6 +486,7 @@ program
         outputPath: resolved.output,
         directoryArg: directory,
         commandName: "imageforge",
+        commandPrefix: resolveProjectCommandPrefix(packageVersion),
         formats,
         quality: resolved.quality,
         blur: resolved.blur,

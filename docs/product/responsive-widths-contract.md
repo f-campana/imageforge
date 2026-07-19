@@ -52,7 +52,8 @@ When responsive mode is enabled:
 ### `--check`
 
 - Check mode compares current sources/options (including normalized width set) against cache state.
-- Exits `1` when processing is needed and prints an exact rerun command.
+- Exits `1` when processing is needed and prints a generation command with the effective options;
+  review shell quoting for the target terminal before running it.
 
 ### `--cache`
 

@@ -3,18 +3,24 @@ import * as fs from "fs";
 import * as path from "path";
 import pLimit from "p-limit";
 import { compileGlobPatterns, matchesAnyGlob } from "./glob.js";
+import { inspectOutputRoot } from "./output-paths.js";
 import { discoverImages, fileHash, processImage, toPosix } from "./processor.js";
 import type { DiscoveryWarning, ImageResult, OutputFormat, ProcessOptions } from "./processor.js";
 import {
   CACHE_FILE,
   acquireCacheLock,
-  cacheOutputsExist,
-  loadCache,
+  calculateOutputHashes,
+  cacheOutputsAreCurrent,
+  collectEntryOutputs,
+  generatorFingerprint,
+  hashBlurDataURL,
+  loadCacheState,
   releaseCacheLock,
   saveCacheAtomic,
   startCacheLockHeartbeat,
 } from "./runner/cache.js";
 import type { CacheEntry } from "./runner/cache.js";
+import { manifestMatches } from "./runner/manifest.js";
 import { preflightCollisions, sanitizeForTerminal } from "./runner/preflight.js";
 import {
   buildRerunCommand,
@@ -48,6 +54,7 @@ type WorkOutcome =
       item: ImageWorkItem;
       entry: ImageForgeEntry;
       result: ImageResult;
+      obsoleteOutputs: string[];
     }
   | {
       kind: "failed";
@@ -57,6 +64,8 @@ type WorkOutcome =
   | {
       kind: "needs-processing";
       item: ImageWorkItem;
+      entry?: ImageForgeEntry;
+      reason?: "output-stale";
     };
 
 export interface RunOptions {
@@ -65,6 +74,7 @@ export interface RunOptions {
   outputPath: string;
   directoryArg: string;
   commandName: string;
+  commandPrefix?: string[];
   formats: OutputFormat[];
   quality: number;
   blur: boolean;
@@ -130,6 +140,8 @@ export interface RunReport {
   rerunCommand: string | null;
   images: RunImageReport[];
   errors: RunnerError[];
+  /** Always emitted at runtime; optional here for source compatibility with existing fixtures. */
+  warnings?: RunnerError[];
 }
 
 export interface RunResult {
@@ -179,11 +191,16 @@ function createInitialReport(options: RunOptions, outputDir: string, cachePath: 
     rerunCommand: null,
     images: [],
     errors: [],
+    warnings: [],
   };
 }
 
 function addError(report: RunReport, code: string, message: string, file?: string) {
   report.errors.push({ code, message, file });
+}
+
+function addWarning(report: RunReport, code: string, message: string, file?: string) {
+  (report.warnings ??= []).push({ code, message, file });
 }
 
 export async function runImageforge(options: RunOptions): Promise<RunResult> {
@@ -233,6 +250,28 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     return { exitCode: 1, report, manifest: null };
   }
 
+  try {
+    const outputRootState = inspectOutputRoot(outputDir);
+    if (outputRootState === "symlink" || outputRootState === "other") {
+      const reason = outputRootState === "symlink" ? "symlinked" : "not a directory";
+      const message = `Refusing to use an output root that is ${reason}: ${sanitizeForTerminal(outputDir)}`;
+      addError(report, "OUTPUT_ROOT_UNSAFE", message, outputDir);
+      printError(chalk.red(message));
+      report.summary.durationMs = Date.now() - startTime;
+      return { exitCode: 1, report, manifest: null };
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      const detail = err instanceof Error ? err.message : "Unable to inspect output root.";
+      const message = `Unable to inspect output root: ${sanitizeForTerminal(outputDir)} (${detail})`;
+      addError(report, "OUTPUT_ROOT_UNSAFE", message, outputDir);
+      printError(chalk.red(message));
+      report.summary.durationMs = Date.now() - startTime;
+      return { exitCode: 1, report, manifest: null };
+    }
+  }
+
   const processOptions: ProcessOptions = {
     formats: options.formats,
     quality: options.quality,
@@ -246,7 +285,8 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
   let cacheLockHeartbeat: NodeJS.Timeout | null = null;
 
   try {
-    if (options.useCache) {
+    const shouldLockCache = options.useCache && !options.checkMode && !options.dryRun;
+    if (shouldLockCache) {
       try {
         cacheLockFd = await acquireCacheLock(cacheLockPath);
         cacheLockHeartbeat = startCacheLockHeartbeat(cacheLockFd, cacheLockPath);
@@ -282,17 +322,23 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       printError(chalk.yellow(`Warning: ${warningMessage}`));
     }
 
+    if (discoveryWarnings.length > 0) {
+      const message =
+        "Image discovery was incomplete; generated state was left unchanged. Restore access and rerun ImageForge.";
+      printError(chalk.red(message));
+      report.summary.durationMs = Date.now() - startTime;
+      return { exitCode: 1, report, manifest: null };
+    }
+
     if (images.length === 0) {
       const message =
         filteredOutCount > 0
           ? `No images matched include/exclude patterns in ${sanitizeForTerminal(inputDir)}`
           : `No images found in ${sanitizeForTerminal(inputDir)}`;
       printInfo(chalk.yellow(message));
-      report.summary.durationMs = Date.now() - startTime;
-      return { exitCode: 0, report, manifest: null };
     }
 
-    if (!options.json) {
+    if (!options.json && images.length > 0) {
       printInfo(chalk.bold(`\nimageforge v${options.version}\n`));
       printInfo(
         `Processing ${chalk.cyan(images.length.toString())} images in ${chalk.dim(sanitizeForTerminal(inputDir))}`
@@ -337,7 +383,14 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       }
     }
 
-    const cache = options.useCache ? loadCache(cachePath) : new Map<string, CacheEntry>();
+    const cacheState = options.useCache
+      ? loadCacheState(cachePath)
+      : {
+          entries: new Map<string, CacheEntry>(),
+          status: "valid" as const,
+          schemaVersion: 2 as const,
+        };
+    const cache = cacheState.entries;
     const writableCache = cache;
 
     const items = images.map((imagePath) => {
@@ -349,13 +402,24 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       };
     });
 
+    let prunedEntries = 0;
     if (options.useCache) {
       const sourceKeys = new Set(
         discoveredImages.map((imagePath) => toPosix(path.relative(inputDir, imagePath)))
       );
-      let prunedEntries = 0;
       for (const key of writableCache.keys()) {
         if (!sourceKeys.has(key)) {
+          const staleEntry = writableCache.get(key);
+          if (staleEntry) {
+            const listed = collectEntryOutputs(staleEntry.result)
+              .map((output) => sanitizeForTerminal(output.path))
+              .join(", ");
+            if (listed) {
+              const message = `Source no longer exists; review and remove its previously cache-owned derivatives if unused: ${listed}`;
+              addWarning(report, "OBSOLETE_OUTPUTS", message, key);
+              printError(chalk.yellow(`Warning: ${message}`));
+            }
+          }
           writableCache.delete(key);
           prunedEntries += 1;
         }
@@ -369,15 +433,22 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       }
     }
 
-    const collisionIssue = await preflightCollisions(
-      items,
-      processOptions,
-      inputDir,
-      outputDir,
-      cache,
-      options.useCache,
-      options.forceOverwrite
-    );
+    const cacheNeedsRefresh =
+      options.useCache &&
+      (cacheState.status !== "valid" || cacheState.schemaVersion !== 2 || prunedEntries > 0);
+
+    const collisionIssue =
+      options.checkMode && cacheNeedsRefresh
+        ? null
+        : await preflightCollisions(
+            items,
+            processOptions,
+            inputDir,
+            outputDir,
+            cache,
+            options.useCache,
+            options.forceOverwrite
+          );
 
     if (collisionIssue) {
       addError(report, "PREFLIGHT_COLLISION", collisionIssue.message);
@@ -394,6 +465,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       generated: new Date().toISOString(),
       images: {},
     };
+    const currentGenerator = generatorFingerprint(options.version);
 
     function formatOutputSummary(result: ImageResult): string {
       return Object.entries(result.outputs)
@@ -461,16 +533,31 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
 
     async function processWorkItem(item: ImageWorkItem): Promise<WorkOutcome> {
       const cacheEntry = cache.get(item.relativePath);
-      if (
-        options.useCache &&
-        cacheEntry?.hash === item.hash &&
-        cacheOutputsExist(cacheEntry, inputDir)
-      ) {
-        return {
-          kind: "cached",
-          item,
-          entry: cacheEntry.result,
-        };
+      if (options.useCache && cacheEntry?.hash === item.hash) {
+        const outputsCurrent = await cacheOutputsAreCurrent(
+          cacheEntry,
+          item.imagePath,
+          item.relativePath,
+          inputDir,
+          outputDir,
+          processOptions,
+          currentGenerator
+        );
+        if (outputsCurrent) {
+          return {
+            kind: "cached",
+            item,
+            entry: cacheEntry.result,
+          };
+        }
+        if (options.checkMode) {
+          return {
+            kind: "needs-processing",
+            item,
+            entry: cacheEntry.result,
+            reason: "output-stale",
+          };
+        }
       }
 
       if (options.checkMode) {
@@ -499,11 +586,18 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
           variants: result.variants,
           hash: item.hash,
         };
+        const currentPaths = new Set(collectEntryOutputs(entry).map((output) => output.path));
+        const obsoleteOutputs = cacheEntry
+          ? collectEntryOutputs(cacheEntry.result)
+              .map((output) => output.path)
+              .filter((outputPath) => !currentPaths.has(outputPath))
+          : [];
         return {
           kind: "processed",
           item,
           result,
           entry,
+          obsoleteOutputs,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown error";
@@ -551,6 +645,13 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       }
 
       if (outcome.kind === "needs-processing") {
+        if (outcome.entry) {
+          manifest.images[outcome.item.relativePath] = outcome.entry;
+        }
+        if (outcome.reason === "output-stale") {
+          const message = `Generated output or cache integrity is stale for ${sanitizeForTerminal(outcome.item.relativePath)}`;
+          addError(report, "OUTPUT_STALE", message, outcome.item.relativePath);
+        }
         report.summary.needsProcessing += 1;
         report.images.push({
           file: outcome.item.relativePath,
@@ -576,6 +677,9 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       writableCache.set(outcome.item.relativePath, {
         hash: outcome.item.hash,
         result: outcome.entry,
+        outputHashes: calculateOutputHashes(outcome.entry, inputDir),
+        generator: currentGenerator,
+        blurHash: hashBlurDataURL(outcome.entry.blurDataURL),
       });
       report.summary.processed += 1;
       report.summary.totalOriginalSize += outcome.result.originalSize;
@@ -588,11 +692,19 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         outputs: outcome.entry.outputs,
         variants: outcome.entry.variants,
       });
+      if (outcome.obsoleteOutputs.length > 0) {
+        const listed = outcome.obsoleteOutputs.map(sanitizeForTerminal).join(", ");
+        const message = `Previously cache-owned derivatives are no longer in the current output contract; review and remove them if unused: ${listed}`;
+        addWarning(report, "OBSOLETE_OUTPUTS", message, outcome.item.relativePath);
+        printError(chalk.yellow(`Warning: ${message}`));
+      }
     }
 
     report.summary.durationMs = Date.now() - startTime;
 
     if (options.checkMode) {
+      const cacheProvenanceUnavailable =
+        cacheState.status === "missing" || cacheState.status === "invalid";
       report.rerunCommand = buildRerunCommand(
         {
           ...options,
@@ -602,12 +714,45 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
         outputDir
       );
 
-      if (report.summary.needsProcessing > 0) {
-        printInfo(
-          chalk.red(
-            `\n${report.summary.needsProcessing.toString()} image(s) need processing. Run: ${report.rerunCommand}`
-          )
-        );
+      if (cacheState.status === "valid" && !manifestMatches(outputPath, manifest)) {
+        const message = `Manifest is missing or stale: ${sanitizeForTerminal(outputPath)}`;
+        addError(report, "MANIFEST_STALE", message, outputPath);
+        printError(chalk.red(message));
+      }
+
+      if (cacheNeedsRefresh) {
+        const reason =
+          cacheState.status === "missing"
+            ? "missing"
+            : cacheState.status === "invalid"
+              ? "malformed or unsupported"
+              : cacheState.schemaVersion !== 2
+                ? "using a legacy schema that requires regeneration"
+                : "stale because it contains deleted-source entries";
+        const recovery = cacheProvenanceUnavailable
+          ? " Inspect existing derivatives first; remove conflicts or add --force-overwrite only when replacement is intentional."
+          : "";
+        const message = `Cache is ${reason}: ${sanitizeForTerminal(cachePath)}.${recovery}`;
+        addError(report, "CACHE_STALE", message, cachePath);
+        printError(chalk.red(message));
+      }
+
+      if (
+        report.summary.needsProcessing > 0 ||
+        report.errors.some(
+          (error) => error.code === "MANIFEST_STALE" || error.code === "CACHE_STALE"
+        )
+      ) {
+        const summary = `\nGenerated state is not current. ${report.summary.needsProcessing.toString()} image(s) need processing.`;
+        if (cacheProvenanceUnavailable) {
+          printInfo(
+            chalk.red(
+              `${summary} Cache provenance is unavailable: inspect existing derivatives, then remove conflicts or add --force-overwrite intentionally. Suggested command: ${report.rerunCommand}`
+            )
+          );
+        } else {
+          printInfo(chalk.red(`${summary} Run: ${report.rerunCommand}`));
+        }
         return { exitCode: 1, report, manifest: null };
       }
 

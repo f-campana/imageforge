@@ -7,6 +7,7 @@ import { collectEntryOutputs } from "./cache.js";
 
 export interface RerunCommandOptions {
   commandName: string;
+  commandPrefix?: string[];
   directoryArg: string;
   outputPath: string;
   formats: OutputFormat[];
@@ -38,7 +39,7 @@ function displayPath(targetPath: string): string {
 
 export function buildRerunCommand(options: RerunCommandOptions, outputDir: string): string {
   const command: string[] = [
-    options.commandName,
+    ...(options.commandPrefix ?? [options.commandName]),
     options.directoryArg,
     "--output",
     displayPath(options.outputPath),

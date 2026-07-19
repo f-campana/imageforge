@@ -1,8 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import sharp from "sharp";
-import { fromPosix, outputPathFor, toPosix } from "../processor.js";
-import type { OutputFormat, ProcessOptions } from "../processor.js";
+import { fromPosix, resolveOutputPaths } from "../output-paths.js";
+import type { ProcessOptions } from "../processor.js";
 import { resolveEffectiveWidths, resolveOrientedDimensions } from "../responsive.js";
 import { LIMIT_INPUT_PIXELS } from "../shared.js";
 import { collectEntryOutputs } from "./cache.js";
@@ -47,32 +47,6 @@ export function sanitizeForTerminal(value: string): string {
 
 function canonicalPathKey(value: string): string {
   return value.normalize("NFC").toLowerCase();
-}
-
-function resolveOutputPath(
-  relativePath: string,
-  format: OutputFormat,
-  inputDir: string,
-  outputDir: string,
-  width?: number
-): string {
-  const outputInsideOutDir = outputPathFor(relativePath, format, width);
-  const fullOutputPath = path.resolve(outputDir, fromPosix(outputInsideOutDir));
-  return toPosix(path.relative(inputDir, fullOutputPath));
-}
-
-function resolveOutputPaths(
-  relativePath: string,
-  format: OutputFormat,
-  inputDir: string,
-  outputDir: string,
-  widths: number[] | undefined
-): string[] {
-  if (!widths || widths.length === 0) {
-    return [resolveOutputPath(relativePath, format, inputDir, outputDir)];
-  }
-
-  return widths.map((width) => resolveOutputPath(relativePath, format, inputDir, outputDir, width));
 }
 
 async function readImageWidthForPreflight(imagePath: string): Promise<number> {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
@@ -10,7 +10,11 @@ import { getDefaultConcurrency, runImageforge } from "../src/runner.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.join(__dirname, "..");
-const OUTPUT = path.join(__dirname, "exports-test-output");
+const OUTPUT = fs.mkdtempSync(path.join(os.tmpdir(), "imageforge-exports-"));
+
+afterAll(() => {
+  fs.rmSync(OUTPUT, { recursive: true, force: true });
+});
 describe("package exports", () => {
   it("exposes CJS require exports for root, processor, and runner subpaths", () => {
     const consumerDir = path.join(OUTPUT, "consumer");
@@ -19,7 +23,7 @@ describe("package exports", () => {
 
     fs.rmSync(consumerDir, { recursive: true, force: true });
     fs.mkdirSync(scopeDir, { recursive: true });
-    fs.symlinkSync(ROOT, packageLink, "dir");
+    fs.symlinkSync(ROOT, packageLink, process.platform === "win32" ? "junction" : "dir");
 
     const script = [
       "const root = require('@imageforge/cli');",
@@ -53,7 +57,7 @@ describe("package exports", () => {
 
     fs.rmSync(consumerDir, { recursive: true, force: true });
     fs.mkdirSync(scopeDir, { recursive: true });
-    fs.symlinkSync(ROOT, packageLink, "dir");
+    fs.symlinkSync(ROOT, packageLink, process.platform === "win32" ? "junction" : "dir");
 
     const script = [
       "import * as root from '@imageforge/cli';",
@@ -134,7 +138,9 @@ describe("cache atomic writes", () => {
           verbose: false,
           quiet: false,
         })
-      ).rejects.toThrow("EISDIR");
+      ).rejects.toSatisfy(
+        (error: NodeJS.ErrnoException) => error.code === "EISDIR" || error.code === "EPERM"
+      );
     } finally {
       const leakedTemps = fs
         .readdirSync(inputDir)

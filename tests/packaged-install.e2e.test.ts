@@ -19,18 +19,28 @@ interface CommandResult {
   stderr: string;
 }
 
+function commandEnv(extraEnv: Record<string, string>): NodeJS.ProcessEnv {
+  const overriddenKeys = new Set(Object.keys(extraEnv).map((key) => key.toUpperCase()));
+  return {
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !overriddenKeys.has(key.toUpperCase()))
+    ),
+    ...extraEnv,
+  };
+}
+
 function runCommand(
   command: string,
   args: string[],
   cwd: string,
   extraEnv: Record<string, string> = {}
 ): CommandResult {
-  const result = spawnSync(command, args, {
+  const windowsShim = process.platform === "win32" && ["npm", "npx", "pnpm"].includes(command);
+  const executable = windowsShim ? (process.env.ComSpec ?? "cmd.exe") : command;
+  const executableArgs = windowsShim ? ["/d", "/s", "/c", `${command}.cmd`, ...args] : args;
+  const result = spawnSync(executable, executableArgs, {
     cwd,
-    env: {
-      ...process.env,
-      ...extraEnv,
-    },
+    env: commandEnv(extraEnv),
     encoding: "utf-8",
   });
 
@@ -53,6 +63,7 @@ describe("packaged install e2e", () => {
   const npmCacheDir = path.join(tempRoot, "npm-cache");
   const inputDir = path.join(consumerDir, "images");
   const oneShotInputDir = path.join(oneShotDir, "images");
+  const oneShotPreviewDir = path.join(oneShotDir, "preview-generated");
   const manifestPath = path.join(consumerDir, "imageforge.json");
   const oneShotManifestPath = path.join(oneShotDir, "imageforge.json");
 
@@ -94,10 +105,39 @@ describe("packaged install e2e", () => {
     const pack = runCommand("pnpm", ["pack", "--pack-destination", tarballDir], ROOT, {
       npm_config_cache: npmCacheDir,
     });
-    expect(pack.status).toBe(0);
+    if (pack.status !== 0) {
+      throw new Error(`pnpm pack failed:\n${pack.stderr || pack.stdout}`);
+    }
 
     const tarballPath = path.join(tarballDir, `imageforge-cli-${PACKAGE_VERSION}.tgz`);
     expect(fs.existsSync(tarballPath)).toBe(true);
+
+    const preview = runCommand(
+      "npm",
+      [
+        "exec",
+        "--yes",
+        "--package",
+        tarballPath,
+        "--",
+        "imageforge",
+        oneShotInputDir,
+        "--dry-run",
+        "--out-dir",
+        oneShotPreviewDir,
+        "-o",
+        oneShotManifestPath,
+      ],
+      oneShotDir,
+      {
+        npm_config_cache: npmCacheDir,
+      }
+    );
+    expect(preview.status).toBe(0);
+    expect(fs.existsSync(oneShotPreviewDir)).toBe(false);
+    expect(fs.existsSync(oneShotManifestPath)).toBe(false);
+    expect(fs.existsSync(path.join(oneShotInputDir, ".imageforge-cache.json"))).toBe(false);
+    expect(fs.existsSync(path.join(oneShotInputDir, ".imageforge-cache.json.lock"))).toBe(false);
 
     const oneShot = runCommand(
       "npm",
@@ -120,6 +160,80 @@ describe("packaged install e2e", () => {
     expect(oneShot.status).toBe(0);
     expect(fs.existsSync(oneShotManifestPath)).toBe(true);
     expect(fs.existsSync(path.join(oneShotInputDir, "oneshot.webp"))).toBe(true);
+
+    const currentCheck = runCommand(
+      "npm",
+      [
+        "exec",
+        "--yes",
+        "--package",
+        tarballPath,
+        "--",
+        "imageforge",
+        oneShotInputDir,
+        "--check",
+        "-o",
+        oneShotManifestPath,
+      ],
+      oneShotDir,
+      { npm_config_cache: npmCacheDir }
+    );
+    expect(currentCheck.status).toBe(0);
+
+    const oneShotCachePath = path.join(oneShotInputDir, ".imageforge-cache.json");
+    const currentCache = fs.readFileSync(oneShotCachePath, "utf-8");
+    fs.writeFileSync(oneShotCachePath, "{not-json");
+    const malformedCacheCheck = runCommand(
+      "npm",
+      [
+        "exec",
+        "--yes",
+        "--package",
+        tarballPath,
+        "--",
+        "imageforge",
+        oneShotInputDir,
+        "--check",
+        "--json",
+        "-o",
+        oneShotManifestPath,
+      ],
+      oneShotDir,
+      { npm_config_cache: npmCacheDir }
+    );
+    expect(malformedCacheCheck.status).toBe(1);
+    const malformedCacheReport = JSON.parse(malformedCacheCheck.stdout) as {
+      errors: { code: string }[];
+    };
+    expect(malformedCacheReport.errors.map(({ code }) => code)).toEqual(["CACHE_STALE"]);
+    fs.writeFileSync(oneShotCachePath, currentCache);
+
+    const tamperedManifest = JSON.parse(fs.readFileSync(oneShotManifestPath, "utf-8")) as {
+      images: Record<string, { hash: string }>;
+    };
+    tamperedManifest.images["oneshot.jpg"].hash = "tampered";
+    fs.writeFileSync(oneShotManifestPath, `${JSON.stringify(tamperedManifest, null, 2)}\n`);
+
+    const staleCheck = runCommand(
+      "npm",
+      [
+        "exec",
+        "--yes",
+        "--package",
+        tarballPath,
+        "--",
+        "imageforge",
+        oneShotInputDir,
+        "--check",
+        "-o",
+        oneShotManifestPath,
+      ],
+      oneShotDir,
+      { npm_config_cache: npmCacheDir }
+    );
+    expect(staleCheck.status).toBe(1);
+    expect(staleCheck.stderr).toContain("Manifest is missing or stale");
+    expect(fs.existsSync(path.join(oneShotInputDir, ".imageforge-cache.json.lock"))).toBe(false);
 
     const init = runCommand("npm", ["init", "-y"], consumerDir, {
       npm_config_cache: npmCacheDir,

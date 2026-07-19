@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.10](https://github.com/f-campana/imageforge/compare/v0.1.9...v0.1.10) (2026-07-19)
+
+
+### Features
+
+* make ImageForge safe to trial and enforce in CI ([e94f628](https://github.com/f-campana/imageforge/commit/e94f628ebda179a13a6a292cb9248bd8d25d2697))
+
+
+### Bug Fixes
+
+* **ci:** build before advisory test suites ([9858bb9](https://github.com/f-campana/imageforge/commit/9858bb98562a1fdbec026b4c5dc23a30498bccfc))
+
 ## [0.1.9](https://github.com/f-campana/imageforge/compare/v0.1.8...v0.1.9) (2026-06-04)
 
 

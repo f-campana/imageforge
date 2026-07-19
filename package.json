@@ -1,6 +1,6 @@
 {
   "name": "@imageforge/cli",
-  "version": "0.1.10",
+  "version": "0.2.0",
   "description": "Build-time image pipeline for web apps: responsive WebP/AVIF derivatives, blur placeholders, manifests, and CI freshness checks.",
   "author": "Fabien Campana",
   "license": "MIT",

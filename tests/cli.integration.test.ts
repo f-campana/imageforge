@@ -543,9 +543,8 @@ describe("CLI integration", () => {
     const digests = Object.values(cache.entries["a.jpg"].outputHashes ?? {});
     expect(digests.length).toBeGreaterThan(0);
     expect(digests.every((digest) => /^[a-f0-9]{64}$/u.test(digest))).toBe(true);
-    expect(cache.entries["a.jpg"].generator).toMatch(
-      /^imageforge:0\.1\.9;sharp:[^;]+;vips:[^;]+$/u
-    );
+    expect(cache.entries["a.jpg"].generator).toContain(`imageforge:${PACKAGE_VERSION};`);
+    expect(cache.entries["a.jpg"].generator).toMatch(/^imageforge:[^;]+;sharp:[^;]+;vips:[^;]+$/u);
     expect(cache.entries["a.jpg"].blurHash).toMatch(/^[a-f0-9]{64}$/u);
   });
 
@@ -899,7 +898,7 @@ describe("CLI integration", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain(
-      'Suggested command: npm exec --yes --package "@imageforge/cli@0.1.9" -- imageforge'
+      `Suggested command: npm exec --yes --package "@imageforge/cli@${PACKAGE_VERSION}" -- imageforge`
     );
     expect(result.stdout).not.toContain("npm exec -- imageforge");
     expect(result.stdout).toContain("Cache provenance is unavailable");

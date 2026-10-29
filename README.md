@@ -52,7 +52,7 @@ Generate optimized derivatives (`webp`, `avif`) and `blurDataURL` placeholders w
 
 ## Install
 
-Runtime requirement: **Node.js >= 20**.
+Runtime requirement: **Node.js >= 20.10.0**.
 
 Install globally:
 

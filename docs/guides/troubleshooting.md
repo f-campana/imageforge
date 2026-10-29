@@ -2,7 +2,7 @@
 
 ## Node.js and native image runtime
 
-ImageForge requires Node.js 20 or newer and uses Sharp for image decoding and encoding. Install the
+ImageForge requires Node.js 20.10.0 or newer and uses Sharp for image decoding and encoding. Install the
 CLI as a project dependency with optional dependencies enabled so your package manager can select
 the Sharp/libvips binary for the current operating system, CPU, and C library.
 

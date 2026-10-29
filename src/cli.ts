@@ -179,21 +179,21 @@ function parseWidthsInput(value: string): number[] {
   return normalized;
 }
 
-function normalizeFormats(
-  formatsInput: string[],
-  jsonMode: boolean
-): { formats: OutputFormat[]; unknown: string[] } {
-  const valid = new Set(["webp", "avif"]);
-  const unknown = formatsInput.filter((format) => !valid.has(format));
-  if (unknown.length > 0 && !jsonMode) {
-    console.error(
-      chalk.yellow(`Unknown format(s) ignored: ${unknown.join(", ")}. Valid: webp, avif`)
-    );
+class InvalidFormatsError extends Error {
+  constructor(
+    public readonly invalid: string[],
+    public readonly jsonMode: boolean
+  ) {
+    super(`Unknown format(s): ${invalid.join(", ")}. Supported formats: webp, avif.`);
   }
-  const formats = formatsInput.filter(
+}
+
+function normalizeFormats(formatsInput: string[], jsonMode: boolean): OutputFormat[] {
+  const unknown = formatsInput.filter((format) => format !== "webp" && format !== "avif");
+  if (unknown.length > 0) throw new InvalidFormatsError(unknown, jsonMode);
+  return formatsInput.filter(
     (format): format is OutputFormat => format === "webp" || format === "avif"
   );
-  return { formats, unknown };
 }
 
 function applyConfig(target: ResolvedOptions, config: ImageForgeConfig) {
@@ -376,7 +376,7 @@ function resolveOptions(
     throw new Error("--check and --dry-run cannot be used together.");
   }
 
-  const { formats } = normalizeFormats(resolved.formatsInput, resolved.json);
+  const formats = normalizeFormats(resolved.formatsInput, resolved.json);
   if (formats.length === 0) {
     throw new Error("No valid formats specified. Use: webp, avif");
   }
@@ -512,7 +512,18 @@ program
       process.exitCode = result.exitCode;
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown error";
-      if (err instanceof ConfigError) {
+      if (err instanceof InvalidFormatsError && err.jsonMode) {
+        console.log(
+          JSON.stringify({
+            error: {
+              code: "INVALID_FORMATS",
+              message,
+              invalidFormats: err.invalid,
+              supportedFormats: ["webp", "avif"],
+            },
+          })
+        );
+      } else if (err instanceof ConfigError) {
         console.error(chalk.red(message));
       } else {
         console.error(chalk.red(`imageforge failed: ${message}`));

@@ -245,6 +245,23 @@ describe("packaged install e2e", () => {
     });
     expect(install.status).toBe(0);
 
+    const invalid = runCommand(
+      "npx",
+      ["imageforge", inputDir, "--formats", "webp,notreal", "--json"],
+      consumerDir,
+      { npm_config_cache: npmCacheDir }
+    );
+    expect(invalid.status).toBe(1);
+    expect(JSON.parse(invalid.stdout)).toMatchObject({
+      error: {
+        code: "INVALID_FORMATS",
+        invalidFormats: ["notreal"],
+        supportedFormats: ["webp", "avif"],
+      },
+    });
+    expect(fs.existsSync(manifestPath)).toBe(false);
+    expect(fs.readdirSync(inputDir)).toEqual(["fixture.jpg"]);
+
     const requireMatrixScript = [
       "const root = require('@imageforge/cli');",
       "const processor = require('@imageforge/cli/processor');",

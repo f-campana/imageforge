@@ -8,6 +8,8 @@
   Build-time image pipeline for Next.js and web apps.
 </p>
 
+> ImageForge is sunset. The site and npm package remain available; no new feature work is planned.
+
 <p align="center">
   <a href="https://www.npmjs.com/package/@imageforge/cli"><strong>npm</strong></a>
   ·

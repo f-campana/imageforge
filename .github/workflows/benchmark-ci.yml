@@ -24,8 +24,6 @@ on:
         description: "Allow publishing despite benchmark regression alerts (true|false)"
         required: false
         default: "false"
-  schedule:
-    - cron: "20 2 * * *"
 
 permissions:
   contents: read

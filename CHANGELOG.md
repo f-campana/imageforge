@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0](https://github.com/f-campana/imageforge/compare/v0.1.10...v0.2.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** Node.js 20.10.0 or newer is required. The sharp and libvips upgrade invalidates existing cached results.
+* **cli:** Unknown output formats now cause a nonzero exit rather than being ignored. Remove unsupported values from flags and configuration.
+
+### Bug Fixes
+
+* **cli:** reject unsupported output formats ([c1b2518](https://github.com/f-campana/imageforge/commit/c1b251890e11190f25a7005a7a7ffaa8fe86e49c))
+* **deps:** update sharp and require Node 20.10 ([e5e69f5](https://github.com/f-campana/imageforge/commit/e5e69f5d3fc9cf7439d8ec436708f519adbffbd1))
+
 ## [0.1.10](https://github.com/f-campana/imageforge/compare/v0.1.9...v0.1.10) (2026-07-19)
 
 

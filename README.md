@@ -52,7 +52,7 @@ Generate optimized derivatives (`webp`, `avif`) and `blurDataURL` placeholders w
 
 ## Install
 
-Runtime requirement: **Node.js >= 20**.
+Runtime requirement: **Node.js >= 20.10.0**.
 
 Install globally:
 
@@ -148,6 +148,7 @@ imageforge <directory> [options]
   `rerunCommand` as a shell-dependent hint and keep the canonical invocation in a package script.
   If cache provenance is missing or malformed, inspect existing derivatives before removing
   conflicts or adding `--force-overwrite` intentionally.
+- Unknown requested output formats cause a nonzero exit before processing. With `--json`, format errors are printed to stdout as `{ "error": { "code": "INVALID_FORMATS", "message": "...", "invalidFormats": ["..."], "supportedFormats": ["webp", "avif"] } }`.
 - `--dry-run` previews which images would be processed but performs no output, manifest, cache,
   directory, or lock writes.
 - `--check` and `--dry-run` cannot be used together.

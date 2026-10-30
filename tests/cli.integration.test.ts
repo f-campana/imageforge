@@ -218,6 +218,79 @@ describe("CLI integration", () => {
     await createJpeg(path.join(cliDir, "test.jpg"), 400, 300, { r: 200, g: 100, b: 50 });
   });
 
+  it("rejects unknown formats before writing in each mode and input source", async () => {
+    for (const source of ["flag", "config"]) {
+      for (const mode of [
+        [],
+        ["--dry-run"],
+        ["--check"],
+        ["--json"],
+        ["--dry-run", "--json"],
+        ["--check", "--json"],
+      ]) {
+        const dir = fs.mkdtempSync(path.join(TEST_ROOT, "formats-"));
+        const input = path.join(dir, "images");
+        fs.mkdirSync(input);
+        await createJpeg(path.join(input, "photo.jpg"), 10, 10, { r: 20, g: 30, b: 40 });
+        const config = path.join(dir, "config.json");
+        fs.writeFileSync(config, JSON.stringify({ formats: ["webp", "notreal"] }));
+        const args = source === "flag" ? ["--formats", "webp,notreal"] : ["--config", config];
+        const result = runCli([input, ...args, ...mode], dir);
+        expect(result.status).toBe(1);
+        if (mode.includes("--json")) {
+          expect(JSON.parse(result.stdout)).toEqual({
+            error: {
+              code: "INVALID_FORMATS",
+              message: "Unknown format(s): notreal. Supported formats: webp, avif.",
+              invalidFormats: ["notreal"],
+              supportedFormats: ["webp", "avif"],
+            },
+          });
+        } else {
+          expect(result.stderr).toContain("notreal");
+          expect(result.stderr).toContain("webp, avif");
+        }
+        expect(fs.readdirSync(input)).toEqual(["photo.jpg"]);
+        expect(fs.existsSync(path.join(dir, "imageforge.json"))).toBe(false);
+      }
+    }
+  });
+
+  it("uses the JSON error contract when JSON mode comes from configuration", () => {
+    const dir = fs.mkdtempSync(path.join(TEST_ROOT, "formats-json-config-"));
+    fs.writeFileSync(
+      path.join(dir, "imageforge.config.json"),
+      JSON.stringify({ formats: ["webp", "unknown"], json: true })
+    );
+    const result = runCli([dir], dir);
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      error: { code: "INVALID_FORMATS", invalidFormats: ["unknown"] },
+    });
+    expect(fs.readdirSync(dir)).toEqual(["imageforge.config.json"]);
+  });
+
+  it("uses neutral dry-run output and gives an empty preview a next step", async () => {
+    const dir = fs.mkdtempSync(path.join(TEST_ROOT, "preview-"));
+    const empty = runCli([dir, "--dry-run"], dir);
+    expect(empty.status).toBe(0);
+    expect(empty.stdout).toContain("No supported images found");
+    expect(empty.stdout).not.toContain("to apply");
+    await createJpeg(path.join(dir, "photo.jpg"), 10, 10, { r: 20, g: 30, b: 40 });
+    const filtered = runCli([dir, "--dry-run", "--include", "*.png"], dir);
+    expect(filtered.status).toBe(0);
+    expect(filtered.stdout).toContain("No images matched the include/exclude filters");
+    expect(filtered.stdout).not.toContain("No supported images found");
+    expect(filtered.stdout).not.toContain("to apply");
+    const preview = runCli([dir, "--dry-run", "--formats", "webp,avif"], dir);
+    expect(preview.status).toBe(0);
+    expect(preview.stdout).toContain("would be processed");
+    expect(preview.stdout).not.toContain("✗");
+    const check = runCli([dir, "--check"], dir);
+    expect(check.status).toBe(1);
+    expect(check.stdout).toContain("✗");
+  });
+
   it("handles empty directories gracefully", () => {
     const emptyDir = path.join(cliDir, "empty");
     fs.mkdirSync(emptyDir, { recursive: true });

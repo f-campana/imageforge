@@ -330,7 +330,7 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       return { exitCode: 1, report, manifest: null };
     }
 
-    if (images.length === 0) {
+    if (images.length === 0 && !options.dryRun) {
       const message =
         filteredOutCount > 0
           ? `No images matched include/exclude patterns in ${sanitizeForTerminal(inputDir)}`
@@ -505,7 +505,9 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
       if (outcome.kind === "needs-processing") {
         if (!options.quiet) {
           printPerFile(
-            `  ${chalk.dim(progress)} ${chalk.red("✗")} ${safeRelativePath} ${chalk.red("(needs processing)")}`
+            options.dryRun
+              ? `  ${chalk.dim(progress)} ${chalk.dim("○")} ${safeRelativePath} ${chalk.dim("(would be processed)")}`
+              : `  ${chalk.dim(progress)} ${chalk.red("✗")} ${safeRelativePath} ${chalk.red("(needs processing)")}`
           );
         }
         return;
@@ -761,24 +763,35 @@ export async function runImageforge(options: RunOptions): Promise<RunResult> {
     }
 
     if (options.dryRun) {
-      report.rerunCommand = buildRerunCommand(
-        {
-          ...options,
-          outputPath,
-          outDir: options.outDir ? outputDir : null,
-          dryRun: false,
-        },
-        outputDir
-      );
+      report.rerunCommand =
+        images.length === 0
+          ? null
+          : buildRerunCommand(
+              {
+                ...options,
+                outputPath,
+                outDir: options.outDir ? outputDir : null,
+                dryRun: false,
+              },
+              outputDir
+            );
 
       if (!options.json) {
-        printInfo(
-          chalk.yellow(
-            `\nDry run complete: ${report.summary.needsProcessing.toString()} image(s) would be processed.`
-          )
-        );
-        if (report.rerunCommand) {
-          printInfo(chalk.dim(`Run without --dry-run to apply: ${report.rerunCommand}`));
+        if (images.length === 0) {
+          printInfo(
+            filteredOutCount > 0
+              ? "No images matched the include/exclude filters. Check the filters and try again."
+              : "No supported images found. Check the input directory and try again."
+          );
+        } else {
+          printInfo(
+            chalk.yellow(
+              `\nDry run complete: ${report.summary.needsProcessing.toString()} image(s) would be processed.`
+            )
+          );
+          if (report.rerunCommand) {
+            printInfo(chalk.dim(`Run without --dry-run to apply: ${report.rerunCommand}`));
+          }
         }
       }
 

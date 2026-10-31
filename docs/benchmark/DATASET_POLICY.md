@@ -41,7 +41,7 @@ Phase 1 uses open-license plus synthetic data.
 ## Tier Definitions
 
 - `tier30`: PR advisory benchmark
-- `tier200`: nightly trend benchmark
+- `tier200`: baseline benchmark
 - `tier500`: manual/release benchmark
 
 ## Required Metadata

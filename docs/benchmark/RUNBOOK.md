@@ -43,11 +43,14 @@ Use `--mode strict` to fail closed when regression alerts are present.
 `benchmark-ci.yml` applies compare modes by event:
 
 1. `pull_request`: `advisory`
-2. `schedule` on `main`: `strict`
-3. `workflow_dispatch` + `publish_site_snapshot=true`: `strict`
+2. `workflow_dispatch` + `publish_site_snapshot=true`: `strict`
    - set `allow_regression_override=true` only for explicit waiver runs
 
+The nightly benchmark and automatic site sync were retired at sunset. The final published snapshot used a manual release-tag run; see [benchmark evidence](https://imageforge.dev/benchmarks/latest) for the actual run and its limitations.
+
 ## Export Site Snapshot (local)
+
+The metadata below is a historical example. Use the actual run metadata when exporting; it does not describe the final v0.2.0 snapshot.
 
 ```bash
 node scripts/bench/export-site-snapshot.mjs \
@@ -73,7 +76,9 @@ node scripts/bench/export-site-snapshot.mjs \
   --headline-scenario batch-all
 ```
 
-## Sync Snapshot to `imageforge-site` (approval-gated)
+## Sync Snapshot to `imageforge-site` (manual, approval-gated)
+
+The automatic scheduled sync is retired; this is a manual tool, not a continuing update commitment.
 
 ```bash
 export IMAGEFORGE_SITE_SYNC_TOKEN=***redacted***
@@ -115,9 +120,6 @@ pnpm run bench:dataset:assert-tag -- \
 
 Release tags are immutable. Existing tags must not be overwritten; publish a new semantic version instead.
 
-## Monthly Governance Sync
+## Historical Governance
 
-1. Pull latest nightly benchmark artifacts.
-2. Confirm dataset version, runner, and profile metadata.
-3. Review or merge the latest benchmark sync PR in `imageforge-site`.
-4. Confirm `/benchmarks/latest` matches snapshot metadata and links.
+Monthly governance and nightly sync are retired. The final site snapshot is dated and does not update on a schedule.

@@ -4,13 +4,14 @@
 
 This standard defines CI-native benchmark requirements for ImageForge CLI performance and claim governance.
 
+The scheduled benchmark and site sync stopped at sunset. The final v0.2.0 snapshot is a manual release-tag run; see the [site benchmark](https://imageforge.dev/benchmarks/latest) for its provenance and limitations.
+
 ## Gate Policy
 
 - Runner: `ubuntu-24.04`
 - Node: `22`
 - Policy: mixed strictness
   - `pull_request`: advisory (non-blocking)
-  - `schedule` on `main`: strict (fail-closed on alerts)
   - `workflow_dispatch` with `publish_site_snapshot=true`: strict unless `allow_regression_override=true`
 - Comparison model: `head` vs `main` in the same workflow run
 - Comparator mode flag: `--mode advisory|strict` (default `advisory`)
@@ -33,14 +34,14 @@ Single-image scenarios are selected from each tier manifest (`singleScenarios.sm
 ## Run Protocol
 
 - PR mode: `1 cold + 3 warm`
-- Nightly/manual mode: `1 cold + 9 warm`
+- Manual mode: `1 cold + 9 warm`
 
 Cold run deletes scenario out-dir and manifest before execution. Warm runs reuse cache and outputs.
 
 ## Dataset Tiers
 
 - `tier30`: PR advisory signal
-- `tier200`: nightly baseline signal
+- `tier200`: baseline signal
 - `tier500`: manual/release confidence run
 
 Distribution target per tier:
